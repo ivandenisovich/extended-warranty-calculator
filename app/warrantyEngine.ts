@@ -1,95 +1,128 @@
-export type ProductCategoryKey =
-  | 'MOBILE'
-  | 'LAPTOP'
-  | 'TV'
-  | 'WHITEGOODS'
-  | 'AUDIO'
-  | 'GENERIC';
+// warrantyEngine.ts
 
 export interface CategoryConfig {
-  label: string;
-  repairRatio: number; // Avg repair cost as a % of purchase price
-  failureRate: number; // 5-year cumulative failure rate (%)
-  accidentalShare: number; // Share of total failures attributable to accidents
+  name: string;
+  failureRate: number; // Baseline 5-year total risk percentage
+  accidentalShare: number; // Portion of total failures due to accidental damage
+  repairRatio: number; // Repair cost as ratio of price
+  aclRules: {
+    priceTiers: [number, number];
+    years: [number, number, number];
+  };
 }
 
-export const CATEGORIES: Record<ProductCategoryKey, CategoryConfig> = {
-  MOBILE: {
-    label: 'Smartphones & Mobile Devices',
-    repairRatio: 0.35,
+export const CATEGORIES: Record<string, CategoryConfig> = {
+  smartphones: {
+    name: 'Smartphones & Mobile Devices',
     failureRate: 25,
-    accidentalShare: 0.40,
+    accidentalShare: 0.4,
+    repairRatio: 0.35,
+    aclRules: {
+      priceTiers: [500, 1500],
+      years: [2, 3, 4],
+    },
   },
-  LAPTOP: {
-    label: 'Laptops & Computers',
-    repairRatio: 0.30,
-    failureRate: 22,
-    accidentalShare: 0.25,
+  laptops: {
+    name: 'Laptops & Computers',
+    failureRate: 20,
+    accidentalShare: 0.3,
+    repairRatio: 0.4,
+    aclRules: {
+      priceTiers: [800, 2000],
+      years: [2, 3, 5],
+    },
   },
-  TV: {
-    label: 'Televisions & Displays',
-    repairRatio: 0.40,
+  tvs: {
+    name: 'TVs & Home Entertainment',
+    failureRate: 12,
+    accidentalShare: 0.1,
+    repairRatio: 0.5,
+    aclRules: {
+      priceTiers: [800, 2500],
+      years: [3, 5, 7],
+    },
+  },
+  appliances: {
+    name: 'Whitegoods & Appliances',
     failureRate: 15,
     accidentalShare: 0.05,
+    repairRatio: 0.45,
+    aclRules: {
+      priceTiers: [600, 2000],
+      years: [3, 5, 8],
+    },
   },
-  WHITEGOODS: {
-    label: 'Major Appliances / Whitegoods',
-    repairRatio: 0.25,
+  audio: {
+    name: 'Audio & Headphones',
     failureRate: 18,
-    accidentalShare: 0.02,
-  },
-  AUDIO: {
-    label: 'Headphones & Audio Equipment',
-    repairRatio: 0.20,
-    failureRate: 12,
-    accidentalShare: 0.20,
-  },
-  GENERIC: {
-    label: 'General Consumer Electronics',
-    repairRatio: 0.25,
-    failureRate: 20,
-    accidentalShare: 0.15,
+    accidentalShare: 0.25,
+    repairRatio: 0.3,
+    aclRules: {
+      priceTiers: [300, 1000],
+      years: [2, 3, 4],
+    },
   },
 };
 
-export interface BreakagePoint {
-  month: number;
-  monthlyHazardPct: number;
-  cumulativeRiskPct: number;
-  activeProtection: 'mfr' | 'stat' | 'ew' | 'cc' | 'none';
-}
+export function getEstimatedAclYears(categoryKey: string, price: number): number {
+  const cat = CATEGORIES[categoryKey] || CATEGORIES.smartphones;
+  const [tier1, tier2] = cat.aclRules.priceTiers;
+  const [yrLow, yrMid, yrHigh] = cat.aclRules.years;
 
-export interface MatrixCell {
-  premium: number;
-  premiumPct: number;
-  excess: number;
-  excessPct: number;
-  netValue: number;
-  expectedClaims: number;
+  if (price < tier1) return yrLow;
+  if (price <= tier2) return yrMid;
+  return yrHigh;
 }
 
 export interface EvaluationInput {
   productPrice: number;
-  productCategory: ProductCategoryKey;
+  productCategory: string;
   mfrYears: number;
   extendedWarrantyYears: number;
   ccExtensionMonths: number;
   ccExcess: number;
   ownershipYears: number;
-  jurisdiction: 'AU_ACL' | 'OTHER';
+  jurisdiction: 'australia' | 'other';
   includesAccidental: boolean;
-  frictionCost: number; // Value ($) placed on avoiding ACL repair/claim delays
+  frictionCost: number;
+}
+
+export interface AnnualPoint {
+  year: number;
+  label: string;
+  defectRatePct: number;
+  accidentalRatePct: number;
+  totalRatePct: number;
+}
+
+export interface TrackSummary {
+  riskPercentage: number;
+  expectedValue: number;
+}
+
+export interface MatrixCell {
+  premium: number;
+  excess: number;
+  netValue: number;
+  isPositive: boolean;
 }
 
 export interface EvaluationResult {
-  statYears: number;
-  profile: BreakagePoint[];
-  matrix: MatrixCell[][];
-  maxPos: number;
-  maxNeg: number;
-  avgRepairCost: number;
-  failureRatePct: number;
+  repairCost: number;
+  estimatedAclYears: number;
+  totalFailureRatePct: number;
+  defectSharePct: number;
   accidentalSharePct: number;
+  mfrTrack: TrackSummary;
+  aclTrack: TrackSummary;
+  ewTrack: TrackSummary;
+  ccTrack: TrackSummary;
+  annualTimeline: AnnualPoint[];
+  matrix: {
+    premiums: number[];
+    excesses: number[];
+    grid: MatrixCell[][];
+  };
 }
 
 export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
@@ -106,169 +139,122 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     frictionCost,
   } = input;
 
-  const catConfig = CATEGORIES[productCategory];
-  const avgRepairCost = productPrice * catConfig.repairRatio;
-  const failureRatePct = catConfig.failureRate;
+  const catConfig = CATEGORIES[productCategory] || CATEGORIES.smartphones;
+  const repairCost = productPrice * catConfig.repairRatio;
+  const estimatedAclYears = getEstimatedAclYears(productCategory, productPrice);
+
+  const totalFailureRatePct = (catConfig.failureRate / 5) * ownershipYears;
+  const totalFailureProb = totalFailureRatePct / 100;
+
   const accidentalShare = catConfig.accidentalShare;
+  const defectShare = 1 - accidentalShare;
 
-  // 1. Australian Consumer Law (ACL) Statutory Duration Thresholds
-  let statYears = 0;
-  if (jurisdiction === 'AU_ACL') {
-    if (productPrice >= 2000) statYears = 3;
-    else if (productPrice >= 1000) statYears = 2;
-    else if (productPrice >= 500) statYears = 1.5;
-    else statYears = 1;
-  }
+  const totalDefectProb = totalFailureProb * defectShare;
+  const totalAccidentalProb = totalFailureProb * accidentalShare;
 
-  const totalMonths = ownershipYears * 12;
+  const totalYears = Math.max(1, Math.round(ownershipYears));
   const mfrMonths = mfrYears * 12;
+  const aclMonths = estimatedAclYears * 12;
   const ewMonths = extendedWarrantyYears * 12;
-  const ccMonths = ccExtensionMonths;
-  const statMonths = statYears * 12;
+  const ccEndMonths = mfrMonths + ccExtensionMonths;
 
-  const baseFailureProb = failureRatePct / 100;
+  const annualAccidentalProb = totalAccidentalProb / totalYears;
 
-  // 2. Unnormalized Bathtub Curve Weight Distribution
-  const rawWeights: number[] = [];
-  let sumWeights = 0;
+  const rawBathtubWeights: number[] = [];
+  let sumBathtubWeights = 0;
 
-  for (let m = 1; m <= totalMonths; m++) {
-    const tYears = m / 12;
-    const infant = 0.6 * Math.exp(-1.5 * tYears);
-    const random = 0.2;
-    const wearOut = 0.5 * Math.pow(tYears / ownershipYears, 2);
-    const w = infant + random + wearOut;
-    rawWeights.push(w);
-    sumWeights += w;
+  for (let y = 1; y <= totalYears; y++) {
+    const infant = 0.6 * Math.exp(-1.2 * y);
+    const background = 0.2;
+    const wearOut = 0.5 * Math.pow(y / totalYears, 2);
+    const w = infant + background + wearOut;
+    rawBathtubWeights.push(w);
+    sumBathtubWeights += w;
   }
 
-  // 3. Build Hazard Profile Map across time
-  const profile: BreakagePoint[] = [];
-  const monthlyProbs: number[] = [];
-  let runningCumulativeProb = 0;
+  const annualTimeline: AnnualPoint[] = [];
+  let mfrRisk = 0;
+  let aclRisk = 0;
+  let ewRisk = 0;
+  let ccRisk = 0;
 
-  for (let m = 1; m <= totalMonths; m++) {
-    const monthlyProb = (rawWeights[m - 1] / sumWeights) * baseFailureProb;
-    monthlyProbs.push(monthlyProb);
-    runningCumulativeProb += monthlyProb;
+  for (let y = 1; y <= totalYears; y++) {
+    const pDefect = (rawBathtubWeights[y - 1] / sumBathtubWeights) * totalDefectProb;
+    const pAccidental = annualAccidentalProb;
+    const pTotal = pDefect + pAccidental;
 
-    let activeProtection: 'mfr' | 'stat' | 'ew' | 'cc' | 'none' = 'none';
+    const startMonth = (y - 1) * 12 + 1;
+    const endMonth = y * 12;
 
-    const isMfrActive = m <= mfrMonths;
-    const isStatActive = jurisdiction === 'AU_ACL' && m <= statMonths;
-    const isEwActive = m > mfrMonths && m <= mfrMonths + ewMonths;
-    const isCcActive = m > mfrMonths && m <= mfrMonths + ccMonths;
+    if (endMonth <= mfrMonths) mfrRisk += pDefect;
+    if (jurisdiction === 'australia' && endMonth <= aclMonths) aclRisk += pDefect;
 
-    if (isMfrActive) {
-      activeProtection = 'mfr';
-    } else if (isStatActive) {
-      activeProtection = 'stat';
-    } else if (isEwActive && isCcActive) {
-      activeProtection = ccExcess <= 50 ? 'cc' : 'ew';
-    } else if (isEwActive) {
-      activeProtection = 'ew';
-    } else if (isCcActive) {
-      activeProtection = 'cc';
+    if (startMonth > mfrMonths && endMonth <= mfrMonths + ewMonths) {
+      ewRisk += includesAccidental ? pTotal : pDefect;
     }
 
-    profile.push({
-      month: m,
-      monthlyHazardPct: monthlyProb * 100,
-      cumulativeRiskPct: runningCumulativeProb * 100,
-      activeProtection,
+    if (startMonth > mfrMonths && endMonth <= ccEndMonths) ccRisk += pDefect;
+
+    annualTimeline.push({
+      year: y,
+      label: `Yr ${y}`,
+      defectRatePct: Number((pDefect * 100).toFixed(2)),
+      accidentalRatePct: Number((pAccidental * 100).toFixed(2)),
+      totalRatePct: Number((pTotal * 100).toFixed(2)),
     });
   }
 
-  // 4. Net Value Matrix Parameters
-  const minPremium = productPrice * 0.05;
-  const maxPremium = productPrice * 0.30;
-  const minExcess = productPrice * 0.00;
-  const maxExcess = productPrice * 0.20;
+  const mfrEV = mfrRisk * repairCost;
+  const aclEV = aclRisk * Math.max(0, repairCost - frictionCost);
+  const ewEV = ewRisk * repairCost;
+  const ccEV = ccRisk * Math.max(0, repairCost - ccExcess);
 
-  const xSteps = 8;
-  const ySteps = 7;
+  const premiums = [60, 110, 160, 210, 260, 310, 360];
+  const excesses = [0, 30, 60, 90, 120, 150, 180, 210, 240];
+  const grid: MatrixCell[][] = [];
 
-  let maxPos = 0;
-  let maxNeg = 0;
-  const matrix: MatrixCell[][] = [];
-
-  const ewStartMonth = mfrMonths + 1;
-  const ewEndMonth = Math.min(totalMonths, mfrMonths + ewMonths);
-
-  for (let y = ySteps; y >= 1; y--) {
+  for (const prem of premiums) {
     const row: MatrixCell[] = [];
-    const p = minPremium + ((y - 1) / (ySteps - 1)) * (maxPremium - minPremium);
-    const pPct = productPrice > 0 ? (p / productPrice) * 100 : 0;
-
-    // Apply Friction / Resolution Speed Discount directly to effective premium cost
-    const effectivePremium = Math.max(0, p - frictionCost);
-
-    for (let x = 0; x <= xSteps; x++) {
-      const e = minExcess + (x / xSteps) * (maxExcess - minExcess);
-      const ePct = productPrice > 0 ? (e / productPrice) * 100 : 0;
-
-      let claimsInExtensionWindow = 0;
-
-      // Integrate monthly hazard split between manufacturing defects and accidental damage
-      for (let m = ewStartMonth; m <= ewEndMonth; m++) {
-        const isMfrActive = m <= mfrMonths;
-        const isStatActive = jurisdiction === 'AU_ACL' && m <= statMonths;
-        const isCcActive = m <= mfrMonths + ccMonths;
-
-        const pMfr = (1 - accidentalShare) * monthlyProbs[m - 1];
-        const pAcc = accidentalShare * monthlyProbs[m - 1];
-
-        let mfrWeight = 0;
-        let accWeight = 0;
-
-        // Accidental Damage Component
-        if (includesAccidental) {
-          if (isCcActive && ccExcess <= e) {
-            accWeight = 0; // Credit card is cheaper
-          } else {
-            accWeight = 1; // Extended Warranty provides unique primary cover
-          }
-        }
-
-        // Manufacturing / Durability Defect Component
-        if (isMfrActive || isStatActive) {
-          mfrWeight = 0; // Covered at $0 cost by Manufacturer or ACL Statutory Guarantee
-        } else if (isCcActive && ccExcess <= e) {
-          mfrWeight = 0; // Credit card is better/cheaper
-        } else {
-          mfrWeight = 1; // Extended Warranty is primary
-        }
-
-        claimsInExtensionWindow += pMfr * mfrWeight + pAcc * accWeight;
-      }
-
-      const insurerPayoutPerClaim = Math.max(0, avgRepairCost - e);
-      const expectedInsurancePayout = claimsInExtensionWindow * insurerPayoutPerClaim;
-      const netValue = expectedInsurancePayout - effectivePremium;
-
-      if (netValue > maxPos) maxPos = netValue;
-      if (netValue < maxNeg) maxNeg = netValue;
-
+    for (const exc of excesses) {
+      const netEv = ewRisk * Math.max(0, repairCost - exc);
+      const netValue = Math.round(netEv - prem);
       row.push({
-        premium: p,
-        premiumPct: pPct,
-        excess: e,
-        excessPct: ePct,
+        premium: prem,
+        excess: exc,
         netValue,
-        expectedClaims: claimsInExtensionWindow,
+        isPositive: netValue > 0,
       });
     }
-    matrix.push(row);
+    grid.push(row);
   }
 
   return {
-    statYears,
-    profile,
-    matrix,
-    maxPos,
-    maxNeg,
-    avgRepairCost,
-    failureRatePct,
-    accidentalSharePct: accidentalShare * 100,
+    repairCost: Math.round(repairCost),
+    estimatedAclYears,
+    totalFailureRatePct: Number(totalFailureRatePct.toFixed(1)),
+    defectSharePct: Math.round(defectShare * 100),
+    accidentalSharePct: Math.round(accidentalShare * 100),
+    mfrTrack: {
+      riskPercentage: Number((mfrRisk * 100).toFixed(1)),
+      expectedValue: Math.round(mfrEV),
+    },
+    aclTrack: {
+      riskPercentage: Number((aclRisk * 100).toFixed(1)),
+      expectedValue: Math.round(aclEV),
+    },
+    ewTrack: {
+      riskPercentage: Number((ewRisk * 100).toFixed(1)),
+      expectedValue: Math.round(ewEV),
+    },
+    ccTrack: {
+      riskPercentage: Number((ccRisk * 100).toFixed(1)),
+      expectedValue: Math.round(ccEV),
+    },
+    annualTimeline,
+    matrix: {
+      premiums,
+      excesses,
+      grid,
+    },
   };
 }
