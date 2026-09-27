@@ -100,6 +100,18 @@ export interface TrackSummary {
   expectedValue: number;
 }
 
+export interface EwTrackSummary {
+  totalRiskPercentage: number;
+  overlapRiskPercentage: number; // Mfr end to ACL end
+  postAclRiskPercentage: number; // ACL end to EW end
+  netRiskPercentage: number;    // Defect post-ACL + Accidental full lifetime
+  hasOverlap: boolean;
+  hasPostAcl: boolean;
+  overlapMonths: number;
+  postAclMonths: number;
+  expectedValue: number;
+}
+
 export interface MatrixCell {
   premium: number;
   excess: number;
@@ -115,7 +127,7 @@ export interface EvaluationResult {
   accidentalSharePct: number;
   mfrTrack: TrackSummary;
   aclTrack: TrackSummary;
-  ewTrack: TrackSummary;
+  ewTrack: EwTrackSummary;
   ccTrack: TrackSummary;
   annualTimeline: AnnualPoint[];
   matrix: {
@@ -139,9 +151,13 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     frictionCost,
   } = input;
 
+  const isAustralia = jurisdiction === 'australia';
   const catConfig = CATEGORIES[productCategory] || CATEGORIES.smartphones;
   const repairCost = productPrice * catConfig.repairRatio;
-  const estimatedAclYears = getEstimatedAclYears(productCategory, productPrice);
+
+  const estimatedAclYears = isAustralia
+    ? getEstimatedAclYears(productCategory, productPrice)
+    : 0;
 
   const totalFailureRatePct = (catConfig.failureRate / 5) * ownershipYears;
   const totalFailureProb = totalFailureRatePct / 100;
@@ -155,7 +171,7 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   const totalYears = Math.max(1, Math.round(ownershipYears));
   const mfrMonths = mfrYears * 12;
   const aclMonths = estimatedAclYears * 12;
-  const ewMonths = extendedWarrantyYears * 12;
+  const ewEndMonths = mfrMonths + extendedWarrantyYears * 12;
   const ccEndMonths = mfrMonths + ccExtensionMonths;
 
   const annualAccidentalProb = totalAccidentalProb / totalYears;
@@ -175,8 +191,11 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   const annualTimeline: AnnualPoint[] = [];
   let mfrRisk = 0;
   let aclRisk = 0;
-  let ewRisk = 0;
   let ccRisk = 0;
+
+  // Extended warranty risks split into overlap (during ACL) and post-ACL
+  let ewOverlapRisk = 0; // Months: mfrMonths -> min(aclMonths, ewEndMonths)
+  let ewPostAclRisk = 0; // Months: max(mfrMonths, aclMonths) -> ewEndMonths
 
   for (let y = 1; y <= totalYears; y++) {
     const pDefect = (rawBathtubWeights[y - 1] / sumBathtubWeights) * totalDefectProb;
@@ -186,14 +205,43 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     const startMonth = (y - 1) * 12 + 1;
     const endMonth = y * 12;
 
-    if (endMonth <= mfrMonths) mfrRisk += pDefect;
-    if (jurisdiction === 'australia' && endMonth <= aclMonths) aclRisk += pDefect;
-
-    if (startMonth > mfrMonths && endMonth <= mfrMonths + ewMonths) {
-      ewRisk += includesAccidental ? pTotal : pDefect;
+    // Manufacturer warranty coverage (defects only)
+    if (endMonth <= mfrMonths) {
+      mfrRisk += pDefect;
     }
 
-    if (startMonth > mfrMonths && endMonth <= ccEndMonths) ccRisk += pDefect;
+    // Statutory ACL coverage (defects only, Australia)
+    if (isAustralia && endMonth <= aclMonths) {
+      aclRisk += pDefect;
+    }
+
+    // Extended Warranty coverage:
+    // Evaluate monthly within current year range
+    const activeEwStartMonth = Math.max(startMonth, mfrMonths + 1);
+    const activeEwEndMonth = Math.min(endMonth, ewEndMonths);
+
+    if (activeEwStartMonth <= activeEwEndMonth) {
+      const activeEwMonthsCount = activeEwEndMonth - activeEwStartMonth + 1;
+      const monthFraction = activeEwMonthsCount / 12;
+
+      for (let m = activeEwStartMonth; m <= activeEwEndMonth; m++) {
+        const mDefect = pDefect / 12;
+        const mAccidental = pAccidental / 12;
+
+        if (m <= aclMonths) {
+          // During ACL period
+          ewOverlapRisk += includesAccidental ? (mDefect + mAccidental) : mDefect;
+        } else {
+          // Post-ACL period
+          ewPostAclRisk += includesAccidental ? (mDefect + mAccidental) : mDefect;
+        }
+      }
+    }
+
+    // Credit Card extension coverage
+    if (startMonth > mfrMonths && endMonth <= ccEndMonths) {
+      ccRisk += pDefect;
+    }
 
     annualTimeline.push({
       year: y,
@@ -204,11 +252,42 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     });
   }
 
+  // Calculate Extended Warranty Net Risk:
+  // - Manufacturing defects included ONLY after ACL expires
+  // - Accidental damage included for the FULL lifetime of the extended warranty (if covered)
+  let ewNetRisk = 0;
+  for (let y = 1; y <= totalYears; y++) {
+    const pDefect = (rawBathtubWeights[y - 1] / sumBathtubWeights) * totalDefectProb;
+    const pAccidental = annualAccidentalProb;
+    const startMonth = (y - 1) * 12 + 1;
+    const endMonth = y * 12;
+
+    const activeEwStartMonth = Math.max(startMonth, mfrMonths + 1);
+    const activeEwEndMonth = Math.min(endMonth, ewEndMonths);
+
+    if (activeEwStartMonth <= activeEwEndMonth) {
+      for (let m = activeEwStartMonth; m <= activeEwEndMonth; m++) {
+        const mDefect = pDefect / 12;
+        const mAccidental = pAccidental / 12;
+
+        // Include accidental damage if applicable for all EW months
+        if (includesAccidental) {
+          ewNetRisk += mAccidental;
+        }
+        // Include manufacturing defect ONLY after ACL period ends
+        if (m > aclMonths) {
+          ewNetRisk += mDefect;
+        }
+      }
+    }
+  }
+
   const mfrEV = mfrRisk * repairCost;
-  const aclEV = aclRisk * Math.max(0, repairCost - frictionCost);
-  const ewEV = ewRisk * repairCost;
+  const aclEV = isAustralia ? aclRisk * Math.max(0, repairCost - frictionCost) : 0;
+  const ewEV = ewNetRisk * repairCost;
   const ccEV = ccRisk * Math.max(0, repairCost - ccExcess);
 
+  // Calculate Net Value Matrix for Extended Warranty based on net post-ACL / accidental risk
   const premiums = [60, 110, 160, 210, 260, 310, 360];
   const excesses = [0, 30, 60, 90, 120, 150, 180, 210, 240];
   const grid: MatrixCell[][] = [];
@@ -216,7 +295,7 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   for (const prem of premiums) {
     const row: MatrixCell[] = [];
     for (const exc of excesses) {
-      const netEv = ewRisk * Math.max(0, repairCost - exc);
+      const netEv = ewNetRisk * Math.max(0, repairCost - exc);
       const netValue = Math.round(netEv - prem);
       row.push({
         premium: prem,
@@ -227,6 +306,9 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     }
     grid.push(row);
   }
+
+  const overlapMonths = Math.max(0, Math.min(aclMonths, ewEndMonths) - mfrMonths);
+  const postAclMonths = Math.max(0, ewEndMonths - Math.max(mfrMonths, aclMonths));
 
   return {
     repairCost: Math.round(repairCost),
@@ -243,7 +325,14 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
       expectedValue: Math.round(aclEV),
     },
     ewTrack: {
-      riskPercentage: Number((ewRisk * 100).toFixed(1)),
+      totalRiskPercentage: Number(((ewOverlapRisk + ewPostAclRisk) * 100).toFixed(1)),
+      overlapRiskPercentage: Number((ewOverlapRisk * 100).toFixed(1)),
+      postAclRiskPercentage: Number((ewPostAclRisk * 100).toFixed(1)),
+      netRiskPercentage: Number((ewNetRisk * 100).toFixed(1)),
+      hasOverlap: overlapMonths > 0,
+      hasPostAcl: postAclMonths > 0,
+      overlapMonths,
+      postAclMonths,
       expectedValue: Math.round(ewEV),
     },
     ccTrack: {

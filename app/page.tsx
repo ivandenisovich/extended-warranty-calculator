@@ -52,10 +52,34 @@ export default function Home() {
     frictionCost,
   ]);
 
+  const isAustralia = jurisdiction === 'australia';
+
+  // Bar layout position calculations
+  const totalMonths = ownershipYears * 12;
+  const mfrMonths = mfrYears * 12;
+  const aclMonths = isAustralia ? evaluation.estimatedAclYears * 12 : 0;
+  const ewTotalMonths = extendedWarrantyYears * 12;
+
+  const mfrWidthPct = Math.min(100, (mfrMonths / totalMonths) * 100);
+  const ewStartPct = (mfrMonths / totalMonths) * 100;
+
+  // Extended Warranty Segment Widths
+  const overlapMonths = evaluation.ewTrack.overlapMonths;
+  const postAclMonths = evaluation.ewTrack.postAclMonths;
+  const totalEwActiveMonths = overlapMonths + postAclMonths;
+
+  const overlapWidthPct = totalEwActiveMonths > 0
+    ? (overlapMonths / totalMonths) * 100
+    : 0;
+
+  const postAclWidthPct = totalEwActiveMonths > 0
+    ? (postAclMonths / totalMonths) * 100
+    : 0;
+
   return (
     <main className="min-h-screen bg-[#0a0d14] text-slate-100 p-4 md:p-8 font-sans">
       <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+
         {/* LEFT COLUMN: INPUT PARAMETERS */}
         <section className="lg:col-span-4 bg-[#111622] border border-slate-800/80 rounded-xl p-5 space-y-4">
           <h2 className="text-base font-bold text-slate-100 tracking-wide">
@@ -91,12 +115,14 @@ export default function Home() {
 
           {/* Dynamic Summary Box */}
           <div className="bg-[#0a0d14] border border-slate-800/80 rounded-lg p-3.5 space-y-2 text-xs">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
-              <span className="text-slate-400 font-medium">Est. ACL Validity Period:</span>
-              <strong className="text-sky-400 text-sm font-bold">
-                {evaluation.estimatedAclYears} Years
-              </strong>
-            </div>
+            {isAustralia && (
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
+                <span className="text-slate-400 font-medium">Est. ACL Validity Period:</span>
+                <strong className="text-sky-400 text-sm font-bold">
+                  {evaluation.estimatedAclYears} Years
+                </strong>
+              </div>
+            )}
             <div className="flex justify-between items-center">
               <span className="text-slate-400">Est. Repair Cost:</span>
               <strong className="text-slate-100 font-bold">${evaluation.repairCost}</strong>
@@ -108,6 +134,10 @@ export default function Home() {
             <div className="flex justify-between items-center">
               <span className="text-slate-400">Accidental Share of Failures:</span>
               <strong className="text-amber-400 font-bold">{evaluation.accidentalSharePct}%</strong>
+            </div>
+            <div className="flex justify-between items-center pt-2 border-t border-slate-800/60">
+              <span className="text-slate-400">EW Net Risk Value (Post-ACL + Accidental):</span>
+              <strong className="text-emerald-400 font-bold">{evaluation.ewTrack.netRiskPercentage}%</strong>
             </div>
           </div>
 
@@ -135,17 +165,19 @@ export default function Home() {
             </span>
           </label>
 
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">
-              Value placed on avoids ACL hassle/delays ($)
-            </label>
-            <input
-              type="number"
-              value={frictionCost}
-              onChange={(e) => setFrictionCost(Number(e.target.value))}
-              className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-3 py-1.5 text-xs text-slate-200"
-            />
-          </div>
+          {isAustralia && (
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">
+                Value placed on avoids ACL hassle/delays ($)
+              </label>
+              <input
+                type="number"
+                value={frictionCost}
+                onChange={(e) => setFrictionCost(Number(e.target.value))}
+                className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-3 py-1.5 text-xs text-slate-200"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3 pt-1">
             <div>
@@ -201,10 +233,10 @@ export default function Home() {
 
         {/* RIGHT COLUMN */}
         <section className="lg:col-span-8 space-y-6">
-          
-          {/* CARD 1: HAZARD PROFILE & ALIGNED TRACK BARS */}
+
+          {/* CARD 1: HAZARD PROFILE & CONTINUOUS COVERAGE TRACKS */}
           <div className="bg-[#111622] border border-slate-800/80 rounded-xl p-5 space-y-4">
-            
+
             <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
               <h3 className="text-sm font-semibold text-slate-200">
                 Bathtub Hazard Profile & Continuous Coverage Tracks
@@ -214,18 +246,16 @@ export default function Home() {
               </span>
             </div>
 
-            {/* Combined Layout Container with Matching Grid Columns */}
+            {/* Layout Grid Aligned to Chart Axis */}
             <div className="space-y-3">
-              
-              {/* Chart Grid Row */}
+
+              {/* Chart Row */}
               <div className="grid grid-cols-12 items-end">
-                {/* Y-Axis Space Offset */}
                 <div className="col-span-3 text-right pr-3 pb-4">
                   <span className="text-[10px] text-slate-500 font-mono block">Hazard</span>
                   <span className="text-[10px] text-slate-500 font-mono block">Rate %</span>
                 </div>
 
-                {/* Area Chart aligned directly over track bars */}
                 <div className="col-span-9 h-48 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
@@ -261,8 +291,7 @@ export default function Home() {
                         formatter={(val: any) => [`${val}%`, '']}
                       />
                       <Legend verticalAlign="top" height={28} iconType="circle" />
-                      
-                      {/* Accidental Risk on bottom */}
+
                       <Area
                         type="monotone"
                         dataKey="accidentalRatePct"
@@ -272,7 +301,6 @@ export default function Home() {
                         fill="url(#accidentalGrad)"
                         strokeWidth={1.5}
                       />
-                      {/* Warranty Defect Risk on top */}
                       <Area
                         type="monotone"
                         dataKey="defectRatePct"
@@ -287,10 +315,10 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Coverage Tracks */}
+              {/* Coverage Track Bars */}
               <div className="space-y-2 text-xs pt-1">
-                
-                {/* Manufacturer Track */}
+
+                {/* Track 1: Manufacturer */}
                 <div className="grid grid-cols-12 items-center">
                   <span className="col-span-3 text-slate-400 font-medium pr-3 text-right">
                     Manufacturer
@@ -298,64 +326,80 @@ export default function Home() {
                   <div className="col-span-9 bg-[#0a0d14] h-6 rounded border border-slate-800 relative overflow-hidden flex items-center">
                     <div
                       className="absolute top-0 bottom-0 left-0 bg-slate-200 text-slate-950 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
-                      style={{ width: `${Math.min(100, (mfrYears / ownershipYears) * 100)}%` }}
+                      style={{ width: `${mfrWidthPct}%` }}
                     >
                       {evaluation.mfrTrack.riskPercentage}% risk
                     </div>
                   </div>
                 </div>
 
-                {/* Statutory (ACL) Track */}
-                <div className="grid grid-cols-12 items-center">
-                  <span className="col-span-3 text-slate-400 font-medium pr-3 text-right">
-                    Statutory (ACL)
-                  </span>
-                  <div className="col-span-9 bg-[#0a0d14] h-6 rounded border border-slate-800 relative overflow-hidden flex items-center">
-                    <div
-                      className="absolute top-0 bottom-0 left-0 bg-sky-500 text-slate-950 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
-                      style={{ width: `${Math.min(100, (mfrYears / ownershipYears) * 100)}%` }}
-                    >
-                      {evaluation.mfrTrack.riskPercentage}% risk
-                    </div>
-                    {evaluation.estimatedAclYears > mfrYears && (
+                {/* Track 2: Statutory (ACL) */}
+                {isAustralia && (
+                  <div className="grid grid-cols-12 items-center">
+                    <span className="col-span-3 text-slate-400 font-medium pr-3 text-right">
+                      Statutory (ACL)
+                    </span>
+                    <div className="col-span-9 bg-[#0a0d14] h-6 rounded border border-slate-800 relative overflow-hidden flex items-center">
                       <div
-                        className="absolute top-0 bottom-0 bg-slate-300 text-slate-900 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
-                        style={{
-                          left: `${(mfrYears / ownershipYears) * 100}%`,
-                          width: `${Math.min(
-                            100 - (mfrYears / ownershipYears) * 100,
-                            ((evaluation.estimatedAclYears - mfrYears) / ownershipYears) * 100
-                          )}%`,
-                        }}
+                        className="absolute top-0 bottom-0 left-0 bg-sky-500 text-slate-950 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
+                        style={{ width: `${mfrWidthPct}%` }}
                       >
-                        {(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1)}% risk
+                        {evaluation.mfrTrack.riskPercentage}% risk
                       </div>
-                    )}
+                      {evaluation.estimatedAclYears > mfrYears && (
+                        <div
+                          className="absolute top-0 bottom-0 bg-slate-300 text-slate-900 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
+                          style={{
+                            left: `${mfrWidthPct}%`,
+                            width: `${Math.min(
+                              100 - mfrWidthPct,
+                              ((evaluation.estimatedAclYears - mfrYears) / ownershipYears) * 100
+                            )}%`,
+                          }}
+                        >
+                          {(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1)}% risk
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Extended Warranty Track */}
+                {/* Track 3: Extended Warranty (Split into Green Overlap & White Post-ACL Sections) */}
                 <div className="grid grid-cols-12 items-center">
                   <span className="col-span-3 text-slate-400 font-medium pr-3 text-right">
                     Extended Warranty
                   </span>
                   <div className="col-span-9 bg-[#0a0d14] h-6 rounded border border-slate-800 relative overflow-hidden flex items-center">
-                    <div
-                      className="absolute top-0 bottom-0 bg-emerald-500 text-slate-950 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
-                      style={{
-                        left: `${(mfrYears / ownershipYears) * 100}%`,
-                        width: `${Math.min(
-                          100 - (mfrYears / ownershipYears) * 100,
-                          (extendedWarrantyYears / ownershipYears) * 100
-                        )}%`,
-                      }}
-                    >
-                      {evaluation.ewTrack.riskPercentage}% risk
-                    </div>
+                    
+                    {/* Section 1: Overlap with ACL (Green - Non-preferred for defects) */}
+                    {evaluation.ewTrack.hasOverlap && (
+                      <div
+                        className="absolute top-0 bottom-0 bg-emerald-500 text-slate-950 font-bold text-[11px] flex items-center justify-center transition-all duration-300 border-r border-emerald-600/40"
+                        style={{
+                          left: `${ewStartPct}%`,
+                          width: `${overlapWidthPct}%`,
+                        }}
+                      >
+                        {evaluation.ewTrack.overlapRiskPercentage}% risk
+                      </div>
+                    )}
+
+                    {/* Section 2: Post-ACL Period (White - Preferred option) */}
+                    {evaluation.ewTrack.hasPostAcl && (
+                      <div
+                        className="absolute top-0 bottom-0 bg-slate-200 text-slate-950 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
+                        style={{
+                          left: `${ewStartPct + overlapWidthPct}%`,
+                          width: `${postAclWidthPct}%`,
+                        }}
+                      >
+                        {evaluation.ewTrack.postAclRiskPercentage}% risk
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Credit Card Track */}
+                {/* Track 4: Credit Card */}
                 <div className="grid grid-cols-12 items-center">
                   <span className="col-span-3 text-slate-400 font-medium pr-3 text-right">
                     Credit Card
@@ -364,9 +408,9 @@ export default function Home() {
                     <div
                       className="absolute top-0 bottom-0 bg-purple-500 text-slate-100 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
                       style={{
-                        left: `${(mfrYears / ownershipYears) * 100}%`,
+                        left: `${mfrWidthPct}%`,
                         width: `${Math.min(
-                          100 - (mfrYears / ownershipYears) * 100,
+                          100 - mfrWidthPct,
                           ((ccExtensionMonths / 12) / ownershipYears) * 100
                         )}%`,
                       }}
@@ -384,14 +428,18 @@ export default function Home() {
 
           {/* CARD 2: EXTENDED WARRANTY NET VALUE MATRIX */}
           <div className="bg-[#111622] border border-slate-800/80 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-slate-200 mb-1">
-              Extended Warranty Net Value Matrix
-            </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Net financial value across combinations of Premium and Excess fees (incorporating accidental damage & friction offsets).
-            </p>
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-200 mb-1">
+                  Extended Warranty Net Value Matrix
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Calculated using net EW risk value: <strong className="text-slate-200">{evaluation.ewTrack.netRiskPercentage}%</strong> (Manufacturing defects after ACL expires + full accidental damage lifetime).
+                </p>
+              </div>
+            </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto mt-4">
               <table className="w-full text-center text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-slate-800/80 text-slate-400">
