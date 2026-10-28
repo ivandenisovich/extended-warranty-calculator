@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     // fallthrough to unauthorized
   }
 
-  const expected = 'CZ2I^zh@O0&Fj1';
+  const expected = process.env.SITE_PASSWORD || '';
   const secret = process.env.SESSION_SECRET || 'insecure-dev-secret';
   if (
     !password ||
