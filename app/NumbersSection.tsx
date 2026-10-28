@@ -121,12 +121,14 @@ export default function NumbersSection({
 
   const mfrWidthPct = pct(mfrYears * 12);
   const { overlapMonths, postAclMonths } = evaluation.ewTrack;
+  const uncoveredStartPct = pct(Math.max(0, evaluation.uncovered.startMonth - 1));
   const trackPcts = {
     mfr: mfrWidthPct,
     aclExtra: pct(evaluation.estimatedAclYears * 12) - mfrWidthPct,
     ewOverlap: pct(overlapMonths),
     ewPostAcl: pct(postAclMonths),
     cc: pct(ccExtensionMonths),
+    uncovered: Math.max(0, 100 - uncoveredStartPct),
   };
 
   // Time axis: one tick per year of ownership, centred in each year band.
@@ -144,6 +146,10 @@ export default function NumbersSection({
     ccExtensionMonths > 0
       ? `${evaluation.ccTrack.riskPercentage}% of failures happen in the extra months your credit card adds to the maker's warranty${ccExcess > 0 ? ` (a ${ccExcess} excess applies per claim)` : ' (no excess)'}.`
       : 'No credit card extension — add one in step 2 if your card offers it.';
+  const uncoveredTooltip =
+    evaluation.uncovered.riskPercentage > 0
+      ? `${evaluation.uncovered.riskPercentage}% of failures happen after every layer of cover has ended — nobody pays for these, you do.`
+      : 'Some form of cover runs for your whole ownership period, so nothing falls outside it.';
 
   return (
     <div className="space-y-5">
@@ -265,6 +271,13 @@ export default function NumbersSection({
             gridlines={gridlines}
             segments={[{ leftPct: trackPcts.mfr, widthPct: trackPcts.cc, riskPct: evaluation.ccTrack.riskPercentage, color: ORANGE, text: 'light', tooltip: ccTooltip }]}
           />
+          {evaluation.uncovered.riskPercentage > 0 && (
+            <TrackBar
+              label="Not covered"
+              gridlines={gridlines}
+              segments={[{ leftPct: uncoveredStartPct, widthPct: trackPcts.uncovered, riskPct: evaluation.uncovered.riskPercentage, color: '#b7bdc9', text: 'dark', tooltip: uncoveredTooltip }]}
+            />
+          )}
         </div>
         {/* Time axis */}
         <div className="grid grid-cols-12 gap-2 mt-1.5">
@@ -293,6 +306,9 @@ export default function NumbersSection({
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (from purchase, also covered free)</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#93d95e' }} /> Paid warranty (only this covers you)</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: ORANGE }} /> Credit card extension</span>
+          {evaluation.uncovered.riskPercentage > 0 && (
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#b7bdc9' }} /> Not covered by anything — you carry this risk</span>
+          )}
         </div>
       </section>
 

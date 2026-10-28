@@ -62,9 +62,11 @@ export default function Home() {
       {/* Header */}
       <header className="bg-tc-navy text-white">
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-tc-lime flex items-center justify-center font-display font-bold text-tc-navy text-lg">
-            T
-          </div>
+          <img
+            src="/4107097-ThingyCare_Icon.svg"
+            alt="ThingyCare logo"
+            className="w-9 h-9 object-contain"
+          />
           <div>
             <div className="font-display font-bold text-lg leading-tight">ThingyCare</div>
             <div className="text-xs text-white/60 leading-tight">Warranty Value Analyzer</div>
@@ -138,6 +140,14 @@ export default function Home() {
                 <div className="flex justify-between items-baseline gap-3">
                   <dt className="text-white/70">Chance it breaks in {form.ownershipYears} yrs</dt>
                   <dd className="font-numeric font-bold text-lg">{evaluation.totalFailureRatePct}%</dd>
+                </div>
+                <div className="flex justify-between items-baseline gap-3 pl-3 text-xs text-white/50">
+                  <dt>Defects &amp; faults</dt>
+                  <dd className="font-numeric">{evaluation.defectSharePct}% of that</dd>
+                </div>
+                <div className="flex justify-between items-baseline gap-3 pl-3 text-xs text-white/50">
+                  <dt>Accidental damage</dt>
+                  <dd className="font-numeric">{evaluation.accidentalSharePct}% of that</dd>
                 </div>
                 {form.jurisdiction === 'australia' && (
                   <div className="flex justify-between items-baseline gap-3">

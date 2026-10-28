@@ -43,7 +43,7 @@ export const INITIAL_STATE: FormState = {
 
 const inputCls =
   'w-full rounded-lg border border-tc-border bg-white px-3.5 py-2.5 text-sm text-tc-navy focus:outline-none focus:ring-2 focus:ring-tc-teal focus:border-transparent transition-shadow';
-const labelCls = 'block text-xs font-semibold text-tc-navy mb-1.5';
+const labelCls = 'block text-xs font-semibold text-tc-navy mb-1.5 min-h-8';
 const stepBadge =
   'w-7 h-7 rounded-full bg-tc-teal text-white font-display text-sm font-bold flex items-center justify-center shrink-0';
 
@@ -174,7 +174,7 @@ export default function InputFlow({
 
       <StepCard n={2} title="What does the warranty promise?" subtitle="Check the product page or the paperwork — every field here matters.">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Field label="Maker's warranty (years)" hint="Usually 1.">
+          <Field label="Maker's warranty (years)" hint="Check the retailer or manufacturer's website.">
             <input
               type="number"
               min={0}
@@ -193,7 +193,7 @@ export default function InputFlow({
             />
           </Field>
           <Field
-            label="Extra cover from your credit card (months)"
+            label="Credit card extra cover (months)"
             hint="Many cards extend the maker's warranty if you paid with them."
           >
             <input

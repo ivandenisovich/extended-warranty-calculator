@@ -3,12 +3,6 @@
 import { useState } from 'react';
 import type { ExtractedProduct } from './extractTypes';
 
-const EXAMPLES = [
-  { label: 'JB Hi-Fi', hint: 'jbhifi.com.au' },
-  { label: 'Harvey Norman', hint: 'harveynorman.com.au' },
-  { label: 'The Good Guys', hint: 'thegoodguys.com.au' },
-];
-
 export default function LinkAnalyzer({
   onApply,
   onDismiss,
@@ -82,7 +76,7 @@ export default function LinkAnalyzer({
       </div>
 
       <p className="text-xs text-white/50 mt-2">
-        Works best with {EXAMPLES.map((e) => e.label).join(', ')} product pages.
+        Some retailers block access to their product pages. If so, enter the details manually below.
       </p>
 
       {error && (

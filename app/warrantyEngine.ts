@@ -158,6 +158,11 @@ export interface EvaluationResult {
   aclTrack: TrackSummary;
   ewTrack: EwTrackSummary;
   ccTrack: TrackSummary;
+  uncovered: {
+    riskPercentage: number;
+    // First month of ownership with no cover at all (1-based; 0 = covered throughout)
+    startMonth: number;
+  };
   annualTimeline: AnnualPoint[];
   matrix: {
     premiums: number[];
@@ -275,6 +280,13 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   let ewOverlapRisk = 0;
   let ewPostAclRisk = 0;
   let ewNetRisk = 0;
+  let uncoveredRisk = 0;
+  const allCoverEndMonths = Math.max(
+    mfrMonths,
+    isAustralia ? aclMonths : 0,
+    ewEndMonths
+  );
+  const uncoveredStartMonth = allCoverEndMonths + 1;
 
   for (let y = 1; y <= totalYears; y++) {
     const pDefect = defectWeights[y - 1] * totalDefectProb;
@@ -321,6 +333,13 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
 
     if (startMonth > mfrMonths && endMonth <= ccEndMonths) {
       ccRisk += pDefect;
+    }
+
+    if (startMonth <= allCoverEndMonths && endMonth > allCoverEndMonths) {
+      const uncoveredMonthsInYear = endMonth - allCoverEndMonths;
+      uncoveredRisk += (pDefect + pAccidental) * (uncoveredMonthsInYear / 12);
+    } else if (startMonth > allCoverEndMonths) {
+      uncoveredRisk += pDefect + pAccidental;
     }
 
     annualTimeline.push({
@@ -397,6 +416,10 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     ccTrack: {
       riskPercentage: Number((ccRisk * 100).toFixed(1)),
       expectedValue: Math.round(ccEV),
+    },
+    uncovered: {
+      riskPercentage: Number((uncoveredRisk * 100).toFixed(1)),
+      startMonth: uncoveredRisk > 0 ? uncoveredStartMonth : 0,
     },
     annualTimeline,
     matrix: {
