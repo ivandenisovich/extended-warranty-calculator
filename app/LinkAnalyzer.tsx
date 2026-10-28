@@ -64,7 +64,7 @@ export default function LinkAnalyzer({
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && url.trim() && !loading && fetchProduct()}
           placeholder="https://www.jbhifi.com.au/products/..."
-          className="flex-1 rounded-lg px-3.5 py-2.5 text-sm bg-white text-tc-navy placeholder:text-slate-400 border border-transparent focus:outline-none focus:ring-2 focus:ring-tc-lime"
+          className="flex-1 rounded-lg px-3.5 py-2.5 text-sm bg-white text-tc-navy placeholder:text-slate-500 border border-transparent focus:outline-none focus:ring-2 focus:ring-tc-lime"
         />
         <button
           onClick={fetchProduct}
@@ -75,7 +75,7 @@ export default function LinkAnalyzer({
         </button>
       </div>
 
-      <p className="text-xs text-white/50 mt-2">
+      <p className="text-xs text-white/70 mt-2">
         Some retailers block access to their product pages. If so, enter the details manually below.
       </p>
 
@@ -136,7 +136,7 @@ export default function LinkAnalyzer({
       {!extracted && (
         <button
           onClick={onDismiss}
-          className="mt-3 text-xs text-white/50 hover:text-white/80 underline underline-offset-2 transition-colors"
+          className="mt-3 text-xs text-white/70 hover:text-white underline underline-offset-2 transition-colors"
         >
           No link? Enter details manually
         </button>

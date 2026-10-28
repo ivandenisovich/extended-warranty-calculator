@@ -78,7 +78,7 @@ export default function Home() {
         {/* Hero + link analyzer */}
         <div className="mb-8">
           <h1 className="font-display text-2xl md:text-4xl font-bold text-tc-navy mb-2 leading-tight">
-            Is that extended warranty <span className="text-tc-teal">actually worth it?</span>
+            Is that extended warranty <span className="text-tc-teal-dark">actually worth it?</span>
           </h1>
           <p className="text-sm md:text-base text-tc-muted max-w-2xl leading-relaxed">
             Answer a few questions — or paste a product link — and we&apos;ll tell you what the warranty
@@ -93,7 +93,7 @@ export default function Home() {
         ) : (
           <button
             onClick={() => setLinkPanelOpen(true)}
-            className="mb-8 text-xs font-semibold text-tc-teal hover:text-tc-teal-dark underline underline-offset-2 transition-colors"
+            className="mb-8 text-xs font-semibold text-tc-teal-dark hover:text-tc-navy underline underline-offset-2 transition-colors"
           >
             ← Analyse another product link
           </button>
@@ -141,13 +141,13 @@ export default function Home() {
                   <dt className="text-white/70">Chance it breaks in {form.ownershipYears} yrs</dt>
                   <dd className="font-numeric font-bold text-lg">{evaluation.totalFailureRatePct}%</dd>
                 </div>
-                <div className="flex justify-between items-baseline gap-3 pl-3 text-xs text-white/50">
+                <div className="flex justify-between items-baseline gap-3 pl-3 text-xs text-white/70">
                   <dt>Defects &amp; faults</dt>
-                  <dd className="font-numeric">{evaluation.defectSharePct}% of that</dd>
+                  <dd className="font-numeric">{evaluation.defectFailureRatePct}%</dd>
                 </div>
-                <div className="flex justify-between items-baseline gap-3 pl-3 text-xs text-white/50">
+                <div className="flex justify-between items-baseline gap-3 pl-3 text-xs text-white/70">
                   <dt>Accidental damage</dt>
-                  <dd className="font-numeric">{evaluation.accidentalSharePct}% of that</dd>
+                  <dd className="font-numeric">{evaluation.accidentalFailureRatePct}%</dd>
                 </div>
                 {form.jurisdiction === 'australia' && (
                   <div className="flex justify-between items-baseline gap-3">
@@ -192,6 +192,7 @@ export default function Home() {
             mfrYears={form.mfrYears}
             ccExtensionMonths={form.ccExtensionMonths}
             ccExcess={form.ccExcess}
+            includesAccidental={form.includesAccidental}
             assumptions={form.assumptions}
             onAssumptionsChange={(a: Assumptions) => setForm((p) => ({ ...p, assumptions: a }))}
             categoryKey={form.productCategory}

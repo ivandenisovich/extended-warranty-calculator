@@ -166,7 +166,7 @@ export default function InputFlow({
         </div>
         <button
           onClick={onOpenExpert}
-          className="mt-4 text-xs font-semibold text-tc-teal hover:text-tc-teal-dark underline underline-offset-2 transition-colors"
+          className="mt-4 text-xs font-semibold text-tc-teal-dark hover:text-tc-navy underline underline-offset-2 transition-colors"
         >
           Expert settings: fine-tune failure assumptions
         </button>

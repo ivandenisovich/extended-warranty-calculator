@@ -133,6 +133,10 @@ export interface EwTrackSummary {
   totalRiskPercentage: number;
   overlapRiskPercentage: number; // Purchase to free cover end
   postAclRiskPercentage: number; // Free cover end to EW end
+  overlapDefectRiskPercentage: number;
+  overlapAccidentalRiskPercentage: number;
+  postAclDefectRiskPercentage: number;
+  postAclAccidentalRiskPercentage: number;
   netRiskPercentage: number;    // Defect post-ACL + Accidental full lifetime
   hasOverlap: boolean;
   hasPostAcl: boolean;
@@ -152,14 +156,16 @@ export interface EvaluationResult {
   repairCost: number;
   estimatedAclYears: number;
   totalFailureRatePct: number;
-  defectSharePct: number;
-  accidentalSharePct: number;
+  defectFailureRatePct: number;
+  accidentalFailureRatePct: number;
   mfrTrack: TrackSummary;
   aclTrack: TrackSummary;
   ewTrack: EwTrackSummary;
   ccTrack: TrackSummary;
   uncovered: {
     riskPercentage: number;
+    defectRiskPercentage: number;
+    accidentalRiskPercentage: number;
     // First month of ownership with no cover at all (1-based; 0 = covered throughout)
     startMonth: number;
   };
@@ -280,7 +286,13 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   let ewOverlapRisk = 0;
   let ewPostAclRisk = 0;
   let ewNetRisk = 0;
+  let ewOverlapDefect = 0;
+  let ewOverlapAcc = 0;
+  let ewPostDefect = 0;
+  let ewPostAcc = 0;
   let uncoveredRisk = 0;
+  let uncoveredDefect = 0;
+  let uncoveredAcc = 0;
   const allCoverEndMonths = Math.max(
     mfrMonths,
     isAustralia ? aclMonths : 0,
@@ -319,6 +331,8 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
         const overlapMonthsInYear = overlapEnd - activeEwStartMonth + 1;
         const f = overlapMonthsInYear / activeEwMonthsCount;
         ewOverlapRisk += (ewDefectInYear + ewAccidentalInYear) * f;
+        ewOverlapDefect += ewDefectInYear * f;
+        ewOverlapAcc += ewAccidentalInYear * f;
         if (includesAccidental) ewNetRisk += ewAccidentalInYear * f;
       }
 
@@ -327,6 +341,8 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
         const postMonthsInYear = activeEwEndMonth - postAclStart + 1;
         const f = postMonthsInYear / activeEwMonthsCount;
         ewPostAclRisk += (ewDefectInYear + ewAccidentalInYear) * f;
+        ewPostDefect += ewDefectInYear * f;
+        ewPostAcc += ewAccidentalInYear * f;
         ewNetRisk += (ewDefectInYear + ewAccidentalInYear) * f;
       }
     }
@@ -337,9 +353,14 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
 
     if (startMonth <= allCoverEndMonths && endMonth > allCoverEndMonths) {
       const uncoveredMonthsInYear = endMonth - allCoverEndMonths;
-      uncoveredRisk += (pDefect + pAccidental) * (uncoveredMonthsInYear / 12);
+      const f = uncoveredMonthsInYear / 12;
+      uncoveredRisk += (pDefect + pAccidental) * f;
+      uncoveredDefect += pDefect * f;
+      uncoveredAcc += pAccidental * f;
     } else if (startMonth > allCoverEndMonths) {
       uncoveredRisk += pDefect + pAccidental;
+      uncoveredDefect += pDefect;
+      uncoveredAcc += pAccidental;
     }
 
     annualTimeline.push({
@@ -392,8 +413,8 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     repairCost: Math.round(repairCost),
     estimatedAclYears,
     totalFailureRatePct: Number((totalFailureProb * 100).toFixed(1)),
-    defectSharePct: Math.round(defectShare * 100),
-    accidentalSharePct: Math.round(accidentalShare * 100),
+    defectFailureRatePct: Number((totalFailureProb * defectShare * 100).toFixed(1)),
+    accidentalFailureRatePct: Number((totalFailureProb * (1 - defectShare) * 100).toFixed(1)),
     mfrTrack: {
       riskPercentage: Number((mfrRisk * 100).toFixed(1)),
       expectedValue: Math.round(mfrEV),
@@ -406,6 +427,10 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
       totalRiskPercentage: Number(((ewOverlapRisk + ewPostAclRisk) * 100).toFixed(1)),
       overlapRiskPercentage: Number((ewOverlapRisk * 100).toFixed(1)),
       postAclRiskPercentage: Number((ewPostAclRisk * 100).toFixed(1)),
+      overlapDefectRiskPercentage: Number((ewOverlapDefect * 100).toFixed(1)),
+      overlapAccidentalRiskPercentage: Number((ewOverlapAcc * 100).toFixed(1)),
+      postAclDefectRiskPercentage: Number((ewPostDefect * 100).toFixed(1)),
+      postAclAccidentalRiskPercentage: Number((ewPostAcc * 100).toFixed(1)),
       netRiskPercentage: Number((ewNetRisk * 100).toFixed(1)),
       hasOverlap: overlapMonths > 0,
       hasPostAcl: postAclMonths > 0,
@@ -419,6 +444,8 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     },
     uncovered: {
       riskPercentage: Number((uncoveredRisk * 100).toFixed(1)),
+      defectRiskPercentage: Number((uncoveredDefect * 100).toFixed(1)),
+      accidentalRiskPercentage: Number((uncoveredAcc * 100).toFixed(1)),
       startMonth: uncoveredRisk > 0 ? uncoveredStartMonth : 0,
     },
     annualTimeline,

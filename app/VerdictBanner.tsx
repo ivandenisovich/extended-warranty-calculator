@@ -57,9 +57,9 @@ export function computeVerdict(
 
 export default function VerdictBanner({ info }: { info: VerdictInfo }) {
   const styles = {
-    'worth-it': { bg: 'bg-tc-lime', text: 'text-tc-navy', sub: 'text-tc-navy/80', bar: 'bg-tc-navy', marker: 'bg-tc-navy' },
-    borderline: { bg: 'bg-tc-orange', text: 'text-white', sub: 'text-white/85', bar: 'bg-white/30', marker: 'bg-white' },
-    'skip-it': { bg: 'bg-tc-red', text: 'text-white', sub: 'text-white/85', bar: 'bg-white/30', marker: 'bg-white' },
+    'worth-it': { bg: 'bg-tc-lime', text: 'text-tc-navy', sub: 'text-tc-navy', bar: 'bg-tc-navy', marker: 'bg-tc-navy' },
+    borderline: { bg: 'bg-tc-orange-dark', text: 'text-white', sub: 'text-white', bar: 'bg-white/30', marker: 'bg-white' },
+    'skip-it': { bg: 'bg-tc-red', text: 'text-white', sub: 'text-white', bar: 'bg-white/30', marker: 'bg-white' },
   }[info.verdict];
 
   return (
@@ -79,7 +79,7 @@ export default function VerdictBanner({ info }: { info: VerdictInfo }) {
           style={{ left: `${info.fairPct}%` }}
         >
           <div className={`w-4 h-4 rounded-full border-2 ${styles.marker} ${info.verdict === 'worth-it' ? 'border-tc-lime' : 'border-transparent'} mx-auto`} />
-          <div className="text-[10px] font-numeric font-semibold text-center mt-0.5 whitespace-nowrap">
+          <div className="text-[11px] font-numeric font-semibold text-center mt-0.5 whitespace-nowrap">
             Fair ${info.fairPrice.toFixed(0)}
           </div>
         </div>
@@ -89,7 +89,7 @@ export default function VerdictBanner({ info }: { info: VerdictInfo }) {
           style={{ left: `${info.quotedPct}%`, top: '6px' }}
         >
           <div className="w-4 h-4 rounded-sm rotate-45 border-2 border-white bg-transparent mx-auto" />
-          <div className="text-[10px] font-numeric font-semibold text-center mt-1 whitespace-nowrap">
+          <div className="text-[11px] font-numeric font-semibold text-center mt-1 whitespace-nowrap">
             Quoted ${info.quoted.toFixed(0)}
           </div>
         </div>

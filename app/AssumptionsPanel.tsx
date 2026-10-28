@@ -49,7 +49,7 @@ function NumberField({
           className={`${inputCls} ${suffix ? 'pr-7' : ''}`}
         />
         {suffix && (
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-tc-muted pointer-events-none">
+          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-tc-muted pointer-events-none">
             {suffix}
           </span>
         )}
@@ -115,7 +115,7 @@ export default function AssumptionsPanel({ categoryKey, assumptions, onChange }:
           {!isDefaultHazard && (
             <button
               onClick={() => setHazardReset()}
-              className="text-[11px] text-tc-teal hover:text-tc-teal-dark underline underline-offset-2"
+              className="text-[11px] text-tc-teal-dark hover:text-tc-navy underline underline-offset-2"
             >
               Reset timing only
             </button>
@@ -159,7 +159,7 @@ export default function AssumptionsPanel({ categoryKey, assumptions, onChange }:
             max={1}
           />
         </div>
-        <p className="text-[10px] text-tc-muted mt-2 leading-relaxed">
+        <p className="text-[11px] text-tc-muted mt-2 leading-relaxed">
           Burst strength = how many failures cluster in year 1. Fade rate = how quickly that burst dies
           out. Background = steady random failures each year. Wear-out = extra failures piling up near
           end of life. Accidental front-loading: 0 spreads drops/spills evenly, 1 puts almost all of
