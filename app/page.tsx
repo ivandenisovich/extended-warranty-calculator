@@ -168,7 +168,9 @@ export default function Home() {
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-slate-800/60">
               <span className="text-slate-400">Break-Even Premium ($0 excess):</span>
-              <strong className="text-emerald-400 font-bold">${evaluation.breakEven.atZeroExcess}</strong>
+              <strong className="text-emerald-400 font-bold">
+                ${evaluation.breakEven.atZeroExcess.toFixed(2)}
+              </strong>
             </div>
           </div>
 
@@ -519,12 +521,14 @@ export default function Home() {
                         <td key={cIdx} className="p-1">
                           <div
                             className={`py-1.5 px-2 rounded font-bold transition-colors ${
-                              cell.isPositive
+                              cell.status === 'positive'
                                 ? 'bg-emerald-500 text-slate-950'
+                                : cell.status === 'neutral'
+                                ? 'bg-orange-500 text-slate-950'
                                 : 'bg-red-600 text-slate-100'
                             }`}
                           >
-                            {cell.netValue >= 0 ? `+$${cell.netValue}` : `-$${Math.abs(cell.netValue)}`}
+                            {cell.netValue >= 0 ? `+${cell.netValue}` : `-${Math.abs(cell.netValue)}`}
                           </div>
                         </td>
                       ))}

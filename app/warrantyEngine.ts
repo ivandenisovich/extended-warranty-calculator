@@ -145,7 +145,7 @@ export interface MatrixCell {
   premium: number;
   excess: number;
   netValue: number;
-  isPositive: boolean;
+  status: 'positive' | 'neutral' | 'negative';
 }
 
 export interface EvaluationResult {
@@ -177,6 +177,27 @@ export interface EvaluationResult {
     repairRatio: number;
     hazard: HazardShape;
   };
+}
+
+// Premium axis for the matrix: bracket the $0-excess break-even premium with
+// steps above and below it, so at least one positive or neutral combination
+// exists whenever one is possible. Prices are rounded to friendly amounts.
+function adaptivePremiums(atZeroExcess: number): number[] {
+  const be = Math.max(1, atZeroExcess);
+  const nice = (v: number) => {
+    if (v < 20) return Math.round(v);
+    if (v < 100) return Math.round(v / 5) * 5;
+    return Math.round(v / 10) * 10;
+  };
+  const set = new Set<number>([
+    0,
+    nice(be * 0.5),
+    nice(be),
+    nice(be * 1.5),
+    nice(be * 2),
+    nice(be * 3),
+  ]);
+  return [...set].sort((a, b) => a - b);
 }
 
 // Excess options scale with purchase price: roughly 1% to 10% in 8 steps,
@@ -312,32 +333,33 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   const ewEV = ewNetRisk * repairCost;
   const ccEV = ccRisk * Math.max(0, repairCost - ccExcess);
 
-  // Net value matrix at price-scaled excess levels
+  // Net value matrix at price-scaled excess levels. The premium axis adapts to
+  // the break-even range so positive and net-neutral combinations are visible.
   const excessLevels = scaledExcessLevels(productPrice);
-  const premiums = [60, 110, 160, 210, 260, 310, 360];
+
+  const fairAt = (exc: number) => ewNetRisk * Math.max(0, repairCost - exc);
+  const breakEvenLevels = excessLevels.map((exc) => ({
+    excess: exc,
+    breakEvenPremium: Math.round(fairAt(exc) * 100) / 100,
+  }));
+  const atZeroExcess = breakEvenLevels[0]?.breakEvenPremium ?? 0;
+
+  const premiums = adaptivePremiums(atZeroExcess);
   const grid: MatrixCell[][] = [];
 
   for (const prem of premiums) {
     const row: MatrixCell[] = [];
     for (const exc of excessLevels) {
-      const netEv = ewNetRisk * Math.max(0, repairCost - exc);
-      const netValue = Math.round(netEv - prem);
+      const netValue = Math.round(fairAt(exc) - prem);
       row.push({
         premium: prem,
         excess: exc,
         netValue,
-        isPositive: netValue > 0,
+        status: netValue > 0 ? 'positive' : netValue === 0 ? 'neutral' : 'negative',
       });
     }
     grid.push(row);
   }
-
-  // Break-even premium: fair price = expected covered payout at each excess
-  const breakEvenLevels = excessLevels.map((exc) => ({
-    excess: exc,
-    breakEvenPremium: Math.round(ewNetRisk * Math.max(0, repairCost - exc)),
-  }));
-  const atZeroExcess = breakEvenLevels[0]?.breakEvenPremium ?? 0;
 
   const overlapMonths = Math.max(0, Math.min(aclMonths, ewEndMonths) - mfrMonths);
   const postAclMonths = Math.max(0, ewEndMonths - Math.max(mfrMonths, aclMonths));

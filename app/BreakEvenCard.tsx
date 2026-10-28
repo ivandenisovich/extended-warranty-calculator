@@ -16,9 +16,11 @@ export default function BreakEvenCard({ evaluation }: BreakEvenCardProps) {
 
   const quoteNum = typeof quotedPremium === 'number' ? quotedPremium : 0;
   const effectiveRepair = Math.max(0, repairCost - quotedExcess);
-  const quoteFairPrice = Math.round(breakEven.netRiskProb * effectiveRepair);
+  const quoteFairPrice = Math.round(breakEven.netRiskProb * effectiveRepair * 100) / 100;
   const verdict = quoteNum === 0 ? null : quoteNum <= quoteFairPrice ? 'good' : 'bad';
-  const margin = Math.abs(quoteFairPrice - quoteNum);
+  const margin = Math.abs(Math.round((quoteFairPrice - quoteNum) * 100) / 100);
+  const fmt = (v: number) =>
+    v.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <div className="bg-[#111622] border border-slate-800/80 rounded-xl p-5">
@@ -37,7 +39,7 @@ export default function BreakEvenCard({ evaluation }: BreakEvenCardProps) {
         <span className="text-xs text-slate-400">
           Fair price at <strong className="text-slate-200">$0 excess</strong>
         </span>
-        <span className="text-xl font-bold text-emerald-400">${breakEven.atZeroExcess}</span>
+        <span className="text-xl font-bold text-emerald-400">${fmt(breakEven.atZeroExcess)}</span>
       </div>
 
       <div className="space-y-1.5">
@@ -55,13 +57,13 @@ export default function BreakEvenCard({ evaluation }: BreakEvenCardProps) {
                 >
                   {widthPct >= 12 && (
                     <span className="text-[11px] font-bold text-slate-950">
-                      ${level.breakEvenPremium}
+                      ${fmt(level.breakEvenPremium)}
                     </span>
                   )}
                 </div>
                 {widthPct < 12 && (
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-400">
-                    ${level.breakEvenPremium}
+                    ${fmt(level.breakEvenPremium)}
                   </span>
                 )}
               </div>
@@ -112,11 +114,11 @@ export default function BreakEvenCard({ evaluation }: BreakEvenCardProps) {
                 {verdict === 'good' ? 'Good value' : 'Poor value'}
               </strong>
               <span className="text-xs text-slate-300">
-                {verdict === 'good' ? `${margin} below` : `${margin} above`} break-even
+                {verdict === 'good' ? `${fmt(margin)} below` : `${fmt(margin)} above`} break-even
               </span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              Fair price for this quote is <strong className="text-slate-200">${quoteFairPrice}</strong>{' '}
+              Fair price for this quote is <strong className="text-slate-200">${fmt(quoteFairPrice)}</strong>{' '}
               (with ${quotedExcess} excess, the covered repair is worth ${effectiveRepair} per claim).
               {verdict === 'bad'
                 ? ' You expect to lose money on average at this price.'
