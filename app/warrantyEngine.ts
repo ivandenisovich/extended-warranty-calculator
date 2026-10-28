@@ -27,7 +27,7 @@ export const DEFAULT_HAZARD: HazardShape = {
   infantDecay: 1.2,
   background: 0.2,
   wearOutStrength: 0.5,
-  accidentalFrontLoad: 0,
+  accidentalFrontLoad: 0.5,
 };
 
 export const CATEGORIES: Record<string, CategoryConfig> = {

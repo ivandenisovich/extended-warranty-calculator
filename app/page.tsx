@@ -23,7 +23,7 @@ const CATEGORY_DEFAULTS: Record<string, Assumptions> = Object.fromEntries(
       failureRate: cat.failureRate,
       accidentalShare: Math.round(cat.accidentalShare * 100),
       repairRatio: Math.round(cat.repairRatio * 100),
-      hazard: { infantStrength: 0.6, infantDecay: 1.2, background: 0.2, wearOutStrength: 0.5, accidentalFrontLoad: 0 },
+      hazard: { infantStrength: 0.6, infantDecay: 1.2, background: 0.2, wearOutStrength: 0.5, accidentalFrontLoad: 0.5 },
     },
   ])
 );
