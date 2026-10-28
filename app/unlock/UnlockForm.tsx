@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Logo from '../Logo';
 
 export default function UnlockForm() {
   const router = useRouter();
@@ -42,11 +43,7 @@ export default function UnlockForm() {
         className="w-full max-w-sm bg-tc-surface border border-tc-border rounded-2xl shadow-lg p-6 md:p-8"
       >
         <div className="flex items-center gap-3 mb-6">
-          <img
-            src="/4107097-ThingyCare_Icon.svg"
-            alt="ThingyCare logo"
-            className="w-10 h-10 object-contain"
-          />
+          <Logo className="w-10 h-10" />
           <div>
             <div className="font-display font-bold text-lg leading-tight">ThingyCare</div>
             <div className="text-xs text-tc-muted leading-tight">Private access</div>
