@@ -23,7 +23,9 @@ export const metadata: Metadata = {
     "Work out what an extended warranty is really worth: break-even premiums, failure risk modelling, and statutory cover comparison.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="en"

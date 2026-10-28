@@ -142,7 +142,7 @@ export default function InputFlow({
           </Field>
           <Field
             label="How long will you keep it? (years)"
-            hint="Most people keep a phone 2–3 years, a TV or fridge 6–8."
+            hint="The value of the warranty depends on how long you plan to keep the product"
           >
             <input
               type="number"
@@ -153,7 +153,7 @@ export default function InputFlow({
               className={inputCls}
             />
           </Field>
-          <Field label="Country" hint="Australian law gives you extra free cover (consumer guarantees).">
+          <Field label="Country" hint="Australian Consumer Law provides additional protection for the “reasonable life” of the product.">
             <select
               value={state.jurisdiction}
               onChange={(e) => set('jurisdiction', e.target.value as 'australia' | 'other')}
