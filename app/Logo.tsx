@@ -1,5 +1,4 @@
-// Inline copy of the ThingyCare logo (trimmed from the public SVG). Inlined so
-// the unlock page can show it without needing a public file fetch.
+// Inline copy of the ThingyCare logo (trimmed from the public SVG).
 export default function Logo({ className }: { className?: string }) {
   return (
     <svg
