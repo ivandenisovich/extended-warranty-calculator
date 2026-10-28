@@ -10,8 +10,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import type { EvaluationResult } from './warrantyEngine';
-import AssumptionsPanel, { type Assumptions } from './AssumptionsPanel';
+import type { EvaluationResult } from '../lib/publicTypes';
+import AssumptionsPanel, { type Assumptions, type CategoryDefaultsShape } from './AssumptionsPanel';
 
 // ThingyCare palette for chart series
 const TEAL = '#36949b';
@@ -124,7 +124,7 @@ export default function NumbersSection({
   includesAccidental,
   assumptions,
   onAssumptionsChange,
-  categoryKey,
+  categoryDefaults,
   expertOpen,
   onToggleExpert,
 }: {
@@ -136,7 +136,7 @@ export default function NumbersSection({
   includesAccidental: boolean;
   assumptions: Assumptions;
   onAssumptionsChange: (a: Assumptions) => void;
-  categoryKey: string;
+  categoryDefaults: CategoryDefaultsShape;
   expertOpen: boolean;
   onToggleExpert: () => void;
 }) {
@@ -166,9 +166,9 @@ export default function NumbersSection({
   }));
   const gridlines = Array.from({ length: ownershipYears + 1 }, (_, i) => (i / ownershipYears) * 100);
 
-  const mfrTooltip = `${evaluation.mfrTrack.riskPercentage}% of the expected failures (all defects — the maker's warranty never covers accidents) happen while the maker's warranty covers you. This risk is covered free.`;
-  const aclExtraTooltip = `A further ${+(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1)}% of failures (all defects — your legal rights don't cover accidents) happen after the maker's warranty ends but while your legal rights still cover you. Also free.`;
-  const ewDefectOverlapTooltip =`${evaluation.ewTrack.overlapDefectRiskPercentage}% of failures are defects that happen while the paid warranty overlaps your free cover (maker's warranty or your legal rights). The paid warranty makes you use those remedies first, so this slice adds 0% of extra cover.`;
+  const mfrTooltip = `${evaluation.mfrTrack.riskPercentage}% of the expected failures (all defects — the manufacturer's warranty never covers accidents) happen while the manufacturer's warranty covers you. This risk is covered free.`;
+  const aclExtraTooltip = `A further ${+(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1)}% of failures (all defects — your legal rights don't cover accidents) happen after the manufacturer's warranty ends but while your legal rights still cover you. Also free.`;
+  const ewDefectOverlapTooltip =`${evaluation.ewTrack.overlapDefectRiskPercentage}% of failures are defects that happen while the paid warranty overlaps your free cover (manufacturer's warranty or your legal rights). The paid warranty makes you use those remedies first, so this slice adds 0% of extra cover.`;
   const ewDefectPostTooltip = `${evaluation.ewTrack.postAclDefectRiskPercentage}% of failures are defects in the stretch where only the paid warranty covers you. This is the part that earns its keep.`;
   const ewAccOverlapTooltip = `${evaluation.ewTrack.overlapAccidentalRiskPercentage}% of failures are accidental damage (drops, spills) while the paid warranty overlaps your free cover. This is the only remedy that covers accidents, so this slice is exactly where the paid warranty earns its keep.`;
   const ewAccPostTooltip = `${evaluation.ewTrack.postAclAccidentalRiskPercentage}% of failures are accidental damage in the stretch where only the paid warranty covers you.`;
@@ -180,7 +180,7 @@ export default function NumbersSection({
     ccExtensionMonths > 0
       ? ccRedundant
         ? `${evaluation.ccTrack.riskPercentage}% of failures (all defects) happen in the extra months your credit card adds — but your legal rights already cover this whole stretch, so the extension is worth $0 here.`
-        : `${evaluation.ccTrack.riskPercentage}% of failures (all defects) happen in the extra months your credit card adds to the maker's warranty${ccExcess > 0 ? ` (a ${ccExcess} excess applies per claim)` : ' (no excess)'}.`
+        : `${evaluation.ccTrack.riskPercentage}% of failures (all defects) happen in the extra months your credit card adds to the manufacturer's warranty${ccExcess > 0 ? ` (a ${ccExcess} excess applies per claim)` : ' (no excess)'}.`
       : 'No credit card extension — add one in step 2 if your card offers it.';
   const uncoveredTooltip =
     evaluation.uncovered.riskPercentage > 0
@@ -204,7 +204,7 @@ export default function NumbersSection({
         {expertOpen && (
           <div className="px-5 md:px-6 pb-6 border-t border-tc-border pt-4">
             <AssumptionsPanel
-              categoryKey={categoryKey}
+              categoryDefaults={categoryDefaults}
               assumptions={assumptions}
               onChange={onAssumptionsChange}
             />
@@ -282,7 +282,7 @@ export default function NumbersSection({
         </p>
         <div className="space-y-2.5">
           <TrackBar
-            label="Maker's warranty"
+            label="Manufacturer's warranty"
             gridlines={gridlines}
             segments={[{ leftPct: 0, widthPct: trackPcts.mfr, riskPct: evaluation.mfrTrack.riskPercentage, color: NAVY, text: 'light', tooltip: mfrTooltip }]}
           />
@@ -349,7 +349,7 @@ export default function NumbersSection({
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-tc-muted">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: NAVY }} /> Maker's warranty</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: NAVY }} /> Manufacturer's warranty</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: TEAL }} /> Your legal rights</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (from purchase, overlaps free cover — defect slice worth $0)</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#93d95e' }} /> Paid warranty (only this covers you)</span>

@@ -1,6 +1,6 @@
 'use client';
 
-import type { EvaluationResult } from './warrantyEngine';
+import type { EvaluationResult } from '../lib/publicTypes';
 
 export type Verdict = 'worth-it' | 'borderline' | 'skip-it';
 

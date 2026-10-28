@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { CATEGORIES } from './warrantyEngine';
+import React from 'react';
 import type { Assumptions } from './AssumptionsPanel';
+import type { CategoryInfo } from './categories';
+import { DEFAULT_HAZARD } from './warrantyTypes.client';
 
 export interface FormState {
   productCategory: string;
@@ -11,6 +12,7 @@ export interface FormState {
   mfrYears: number;
   extendedWarrantyYears: number;
   jurisdiction: 'australia' | 'other';
+  purchaseProtectionDays: number;
   includesAccidental: boolean;
   frictionCost: number;
   ccExtensionMonths: number;
@@ -20,26 +22,40 @@ export interface FormState {
   assumptions: Assumptions;
 }
 
-export const INITIAL_STATE: FormState = {
-  productCategory: 'smartphones',
-  productPrice: 1200,
-  ownershipYears: 5,
-  mfrYears: 1,
-  extendedWarrantyYears: 5,
-  jurisdiction: 'australia',
-  includesAccidental: true,
-  frictionCost: 50,
-  ccExtensionMonths: 12,
-  ccExcess: 50,
-  quotedPremium: '',
-  quotedExcess: 0,
-  assumptions: {
-    failureRate: CATEGORIES.smartphones.failureRate,
-    accidentalShare: Math.round(CATEGORIES.smartphones.accidentalShare * 100),
-    repairRatio: Math.round(CATEGORIES.smartphones.repairRatio * 100),
-    hazard: { infantStrength: 0.6, infantDecay: 1.2, background: 0.2, wearOutStrength: 0.5, accidentalFrontLoad: 0.5 },
-  },
-};
+export function makeInitialState(categories: CategoryInfo[]): FormState {
+  const first = categories[0];
+  return {
+    productCategory: first?.key ?? 'smartphones',
+    productPrice: 1200,
+    ownershipYears: 5,
+    mfrYears: 1,
+    extendedWarrantyYears: 5,
+    jurisdiction: 'australia',
+    purchaseProtectionDays: 0,
+    includesAccidental: true,
+    frictionCost: 50,
+    ccExtensionMonths: 12,
+    ccExcess: 50,
+    quotedPremium: '',
+    quotedExcess: 0,
+    assumptions: {
+      failureRate: first?.defaults.failureRate ?? 25,
+      accidentalShare: first?.defaults.accidentalShare ?? 40,
+      repairRatio: first?.defaults.repairRatio ?? 35,
+      hazard: { ...DEFAULT_HAZARD },
+    },
+  };
+}
+
+export function categoryDefaults(categories: CategoryInfo[], key: string) {
+  return (
+    categories.find((c) => c.key === key)?.defaults ?? {
+      failureRate: 25,
+      accidentalShare: 40,
+      repairRatio: 35,
+    }
+  );
+}
 
 const inputCls =
   'w-full rounded-lg border border-tc-border bg-white px-3.5 py-2.5 text-sm text-tc-navy focus:outline-none focus:ring-2 focus:ring-tc-teal focus:border-transparent transition-shadow';
@@ -91,10 +107,12 @@ function StepCard({
 }
 
 export default function InputFlow({
+  categories,
   state,
   onChange,
   onOpenExpert,
 }: {
+  categories: CategoryInfo[];
   state: FormState;
   onChange: (next: FormState) => void;
   onOpenExpert: () => void;
@@ -103,14 +121,15 @@ export default function InputFlow({
     onChange({ ...state, [key]: value });
 
   const handleCategoryChange = (key: string) => {
-    const cat = CATEGORIES[key] ?? CATEGORIES.smartphones;
+    const cat = categories.find((c) => c.key === key);
+    if (!cat) return;
     onChange({
       ...state,
       productCategory: key,
       assumptions: {
-        failureRate: cat.failureRate,
-        accidentalShare: Math.round(cat.accidentalShare * 100),
-        repairRatio: Math.round(cat.repairRatio * 100),
+        failureRate: cat.defaults.failureRate,
+        accidentalShare: cat.defaults.accidentalShare,
+        repairRatio: cat.defaults.repairRatio,
         hazard: { ...state.assumptions.hazard },
       },
     });
@@ -126,8 +145,8 @@ export default function InputFlow({
               onChange={(e) => handleCategoryChange(e.target.value)}
               className={inputCls}
             >
-              {Object.entries(CATEGORIES).map(([key, cat]) => (
-                <option key={key} value={key}>{cat.name}</option>
+              {categories.map((cat) => (
+                <option key={cat.key} value={cat.key}>{cat.name}</option>
               ))}
             </select>
           </Field>
@@ -153,15 +172,14 @@ export default function InputFlow({
               className={inputCls}
             />
           </Field>
-          <Field label="Country" hint="Australian Consumer Law provides additional protection for the “reasonable life” of the product.">
-            <select
-              value={state.jurisdiction}
-              onChange={(e) => set('jurisdiction', e.target.value as 'australia' | 'other')}
+          <Field label="Manufacturer's warranty (years)" hint="Check the retailer or manufacturer's website.">
+            <input
+              type="number"
+              min={0}
+              value={state.mfrYears}
+              onChange={(e) => set('mfrYears', Number(e.target.value))}
               className={inputCls}
-            >
-              <option value="australia">Australia</option>
-              <option value="other">Somewhere else</option>
-            </select>
+            />
           </Field>
         </div>
         <button
@@ -172,29 +190,29 @@ export default function InputFlow({
         </button>
       </StepCard>
 
-      <StepCard n={2} title="What does the warranty promise?" subtitle="Check the product page or the paperwork — every field here matters.">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Field label="Maker's warranty (years)" hint="Check the retailer or manufacturer's website.">
-            <input
-              type="number"
-              min={0}
-              value={state.mfrYears}
-              onChange={(e) => set('mfrYears', Number(e.target.value))}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Extended warranty (years)" hint="Years of paid cover from the day you buy — it starts at purchase, not after the maker's warranty ends.">
-            <input
-              type="number"
-              min={0}
-              value={state.extendedWarrantyYears}
-              onChange={(e) => set('extendedWarrantyYears', Number(e.target.value))}
-              className={inputCls}
-            />
-          </Field>
+      <StepCard n={2} title="What are your consumer rights?">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field
-            label="Credit card extra cover (months)"
-            hint="Many cards extend the maker's warranty if you paid with them."
+            label="Country where you bought it"
+            hint="Australian Consumer Law provides additional protection for the “reasonable life” of the product."
+          >
+            <select
+              value={state.jurisdiction}
+              onChange={(e) => set('jurisdiction', e.target.value as 'australia' | 'other')}
+              className={inputCls}
+            >
+              <option value="australia">Australia</option>
+              <option value="other">Somewhere else</option>
+            </select>
+          </Field>
+        </div>
+      </StepCard>
+
+      <StepCard n={3} title="Do you have credit card protection perks?" subtitle="Check your card's benefits guide — many cards include these automatically.">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field
+            label="Extra cover (months)"
+            hint="Many cards extend the manufacturer's warranty if you paid with them."
           >
             <input
               type="number"
@@ -213,22 +231,32 @@ export default function InputFlow({
               className={inputCls}
             />
           </Field>
+          <Field
+            label="Purchase Protection (days)"
+            hint="Some cards cover newly bought items against theft or accidental damage for a period after purchase."
+          >
+            <input
+              type="number"
+              min={0}
+              value={state.purchaseProtectionDays}
+              onChange={(e) => set('purchaseProtectionDays', Number(e.target.value))}
+              className={inputCls}
+            />
+          </Field>
         </div>
-        <label className="flex items-start gap-2.5 mt-4 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={state.includesAccidental}
-            onChange={(e) => set('includesAccidental', e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-tc-border text-tc-teal focus:ring-tc-teal"
-          />
-          <span className="text-sm text-tc-navy leading-snug">
-            The extended warranty covers accidental damage (drops, spills)
-          </span>
-        </label>
       </StepCard>
 
-      <StepCard n={3} title="What does it cost?" subtitle="The price on the checkout page, and any excess per claim.">
+      <StepCard n={4} title="What paid warranty have you been offered?" subtitle="The details from the offer or checkout page.">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Extended warranty (years)" hint="Years of paid cover from the day you buy — it starts at purchase, not after the manufacturer's warranty ends.">
+            <input
+              type="number"
+              min={0}
+              value={state.extendedWarrantyYears}
+              onChange={(e) => set('extendedWarrantyYears', Number(e.target.value))}
+              className={inputCls}
+            />
+          </Field>
           <Field label="Warranty price ($)">
             <input
               type="number"
@@ -247,9 +275,7 @@ export default function InputFlow({
               className={inputCls}
             />
           </Field>
-        </div>
-        {state.jurisdiction === 'australia' && (
-          <div className="mt-4">
+          {state.jurisdiction === 'australia' && (
             <Field
               label="What avoiding ACL hassle is worth to you ($)"
               hint="Australian consumer guarantees already cover major failures — a paid warranty saves you arguing with the retailer. How much is that peace of mind worth?"
@@ -262,8 +288,19 @@ export default function InputFlow({
                 className={inputCls}
               />
             </Field>
-          </div>
-        )}
+          )}
+        </div>
+        <label className="flex items-start gap-2.5 mt-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={state.includesAccidental}
+            onChange={(e) => set('includesAccidental', e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-tc-border text-tc-teal focus:ring-tc-teal"
+          />
+          <span className="text-sm text-tc-navy leading-snug">
+            The extended warranty covers accidental damage (drops, spills)
+          </span>
+        </label>
       </StepCard>
     </div>
   );

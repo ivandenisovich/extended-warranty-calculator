@@ -1,6 +1,6 @@
 'use client';
 
-import { CATEGORIES, DEFAULT_HAZARD, type HazardShape } from './warrantyEngine';
+import { DEFAULT_HAZARD, type HazardShape } from './warrantyTypes.client';
 
 export interface Assumptions {
   failureRate: number;
@@ -10,9 +10,15 @@ export interface Assumptions {
 }
 
 export interface AssumptionsProps {
-  categoryKey: string;
+  categoryDefaults: CategoryDefaultsShape;
   assumptions: Assumptions;
   onChange: (next: Assumptions) => void;
+}
+
+export interface CategoryDefaultsShape {
+  failureRate: number;
+  accidentalShare: number; // 0-100
+  repairRatio: number; // 0-100
 }
 
 const inputCls =
@@ -58,7 +64,7 @@ function NumberField({
   );
 }
 
-export default function AssumptionsPanel({ categoryKey, assumptions, onChange }: AssumptionsProps) {
+export default function AssumptionsPanel({ categoryDefaults, assumptions, onChange }: AssumptionsProps) {
   const set = <K extends keyof Assumptions>(key: K, value: Assumptions[K]) =>
     onChange({ ...assumptions, [key]: value });
 
@@ -70,14 +76,11 @@ export default function AssumptionsPanel({ categoryKey, assumptions, onChange }:
       (k) => assumptions.hazard[k] === DEFAULT_HAZARD[k]
     );
 
-  const defaultCat = CATEGORIES[categoryKey] || CATEGORIES.smartphones;
-
   return (
     <div className="space-y-4">
       <p className="text-xs text-tc-muted leading-relaxed">
-        These assumptions drive every result on the page. Defaults are pre-filled from the{' '}
-        <strong className="text-tc-navy">{defaultCat.name}</strong> category. Tune them to see how the
-        model&apos;s fair price moves.
+        These assumptions drive every result on the page. Defaults are pre-filled for the selected
+        product type. Tune them to see how the model&apos;s fair price moves.
       </p>
 
       <div className="grid grid-cols-2 gap-3">
@@ -168,7 +171,7 @@ export default function AssumptionsPanel({ categoryKey, assumptions, onChange }:
       </div>
 
       <button
-        onClick={() => resetToDefaults(defaultCat)}
+        onClick={() => resetToDefaults(categoryDefaults)}
         className="w-full text-xs py-2 rounded-md border border-tc-border text-tc-navy hover:bg-tc-teal-light/60 hover:border-tc-teal/40 transition-colors"
       >
         Reset to Defaults
@@ -180,11 +183,11 @@ export default function AssumptionsPanel({ categoryKey, assumptions, onChange }:
     onChange({ ...assumptions, hazard: { ...DEFAULT_HAZARD } });
   }
 
-  function resetToDefaults(cat: typeof defaultCat) {
+  function resetToDefaults(cat: CategoryDefaultsShape) {
     onChange({
       failureRate: cat.failureRate,
-      accidentalShare: Math.round(cat.accidentalShare * 100),
-      repairRatio: Math.round(cat.repairRatio * 100),
+      accidentalShare: cat.accidentalShare,
+      repairRatio: cat.repairRatio,
       hazard: { ...DEFAULT_HAZARD },
     });
   }

@@ -19,8 +19,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Warranty Value Analyzer | ThingyCare",
-  description:
-    "Work out what an extended warranty is really worth: break-even premiums, failure risk modelling, and statutory cover comparison.",
+  description: "Private warranty analysis tool.",
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({

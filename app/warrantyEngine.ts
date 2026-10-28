@@ -1,4 +1,13 @@
-// warrantyEngine.ts
+// warrantyEngine.ts — server-only. The model logic must never ship to the
+// browser; the client talks to /api/evaluate and receives results only.
+import 'server-only';
+
+import type {
+  EvaluationResult,
+  HazardShape,
+} from '../lib/publicTypes';
+
+export type { EvaluationResult };
 
 export interface CategoryConfig {
   name: string;
@@ -10,16 +19,6 @@ export interface CategoryConfig {
     priceTiers: [number, number];
     years: [number, number, number];
   };
-}
-
-// Shape of failure risk over the ownership period. Weights are relative and
-// normalised, so only proportions matter.
-export interface HazardShape {
-  infantStrength: number; // Early-defect burst strength
-  infantDecay: number; // How fast the early burst fades per year
-  background: number; // Steady random-failure rate across all years
-  wearOutStrength: number; // Wear-out failures near end of ownership
-  accidentalFrontLoad: number; // 0 = accidental risk spread evenly, 1 = all in year 1
 }
 
 export const DEFAULT_HAZARD: HazardShape = {
@@ -88,6 +87,23 @@ export const CATEGORIES: Record<string, CategoryConfig> = {
   },
 };
 
+// Ordered category list + defaults for the client (no model parameters).
+export function publicCategoryList(): {
+  key: string;
+  name: string;
+  defaults: { failureRate: number; accidentalShare: number; repairRatio: number };
+}[] {
+  return Object.entries(CATEGORIES).map(([key, cat]) => ({
+    key,
+    name: cat.name,
+    defaults: {
+      failureRate: cat.failureRate,
+      accidentalShare: Math.round(cat.accidentalShare * 100),
+      repairRatio: Math.round(cat.repairRatio * 100),
+    },
+  }));
+}
+
 export function getEstimatedAclYears(categoryKey: string, price: number): number {
   const cat = CATEGORIES[categoryKey] || CATEGORIES.smartphones;
   const [tier1, tier2] = cat.aclRules.priceTiers;
@@ -114,80 +130,6 @@ export interface EvaluationInput {
   accidentalShare?: number;
   repairRatio?: number;
   hazard?: Partial<HazardShape>;
-}
-
-export interface AnnualPoint {
-  year: number;
-  label: string;
-  defectRatePct: number;
-  accidentalRatePct: number;
-  totalRatePct: number;
-}
-
-export interface TrackSummary {
-  riskPercentage: number;
-  expectedValue: number;
-}
-
-export interface EwTrackSummary {
-  totalRiskPercentage: number;
-  overlapRiskPercentage: number; // Purchase to free cover end
-  postAclRiskPercentage: number; // Free cover end to EW end
-  overlapDefectRiskPercentage: number;
-  overlapAccidentalRiskPercentage: number;
-  postAclDefectRiskPercentage: number;
-  postAclAccidentalRiskPercentage: number;
-  netRiskPercentage: number;    // Defect post-ACL + Accidental full lifetime
-  hasOverlap: boolean;
-  hasPostAcl: boolean;
-  overlapMonths: number;
-  postAclMonths: number;
-  expectedValue: number;
-}
-
-export interface MatrixCell {
-  premium: number;
-  excess: number;
-  netValue: number;
-  status: 'positive' | 'neutral' | 'negative';
-}
-
-export interface EvaluationResult {
-  repairCost: number;
-  estimatedAclYears: number;
-  totalFailureRatePct: number;
-  defectFailureRatePct: number;
-  accidentalFailureRatePct: number;
-  mfrTrack: TrackSummary;
-  aclTrack: TrackSummary;
-  ewTrack: EwTrackSummary;
-  ccTrack: TrackSummary;
-  uncovered: {
-    riskPercentage: number;
-    defectRiskPercentage: number;
-    accidentalRiskPercentage: number;
-    // First month of ownership with no cover at all (1-based; 0 = covered throughout)
-    startMonth: number;
-  };
-  annualTimeline: AnnualPoint[];
-  matrix: {
-    premiums: number[];
-    excesses: number[];
-    grid: MatrixCell[][];
-  };
-  breakEven: {
-    // Break-even premium for each price-scaled excess level
-    levels: { excess: number; breakEvenPremium: number }[];
-    atZeroExcess: number;
-    // Net risk the EW actually covers, as a probability (0-1)
-    netRiskProb: number;
-  };
-  assumed: {
-    failureRate: number;
-    accidentalShare: number;
-    repairRatio: number;
-    hazard: HazardShape;
-  };
 }
 
 // Premium axis for the matrix: bracket the $0-excess break-even premium with
@@ -279,7 +221,7 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   const defectWeights = hazardWeights.map((w) => w / cumulativeRisk);
   const accidentalWeights = accidentalWeightsFor(hazard.accidentalFrontLoad, totalYears);
 
-  const annualTimeline: AnnualPoint[] = [];
+  const annualTimeline: EvaluationResult['annualTimeline'] = [];
   let mfrRisk = 0;
   let aclRisk = 0;
   let ccRisk = 0;
@@ -389,10 +331,10 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   const atZeroExcess = breakEvenLevels[0]?.breakEvenPremium ?? 0;
 
   const premiums = adaptivePremiums(atZeroExcess);
-  const grid: MatrixCell[][] = [];
+  const grid: EvaluationResult['matrix']['grid'] = [];
 
   for (const prem of premiums) {
-    const row: MatrixCell[] = [];
+    const row: EvaluationResult['matrix']['grid'][number] = [];
     for (const exc of excessLevels) {
       const netValue = Math.round(fairAt(exc) - prem);
       row.push({
