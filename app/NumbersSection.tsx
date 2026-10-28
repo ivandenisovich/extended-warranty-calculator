@@ -28,6 +28,7 @@ interface Segment {
   color: string;
   text?: 'dark' | 'light';
   tooltip: string;
+  label?: string;
 }
 
 // Diagonal white stripes over the segment colour mark the accidental-damage
@@ -111,7 +112,7 @@ function TrackBar({
               ) : null}
               {s.widthPct > 9 ? (
                 <span className="group relative cursor-help">
-                  {s.riskPct}%
+                  {s.label ?? `${s.riskPct}%`}
                   <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block w-44 rounded-lg bg-tc-navy text-white text-[11px] font-normal font-sans px-2.5 py-1.5 text-center leading-snug shadow-lg z-20">
                     {s.tooltip}
                   </span>
@@ -178,13 +179,19 @@ export default function NumbersSection({
 
   const mfrTooltip = `${evaluation.mfrTrack.riskPercentage}% of the expected failures (all defects — the maker's warranty never covers accidents) happen while the maker's warranty covers you. This risk is covered free.`;
   const aclExtraTooltip = `A further ${+(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1)}% of failures (all defects — your legal rights don't cover accidents) happen after the maker's warranty ends but while your legal rights still cover you. Also free.`;
-  const ewDefectOverlapTooltip =`${evaluation.ewTrack.overlapDefectRiskPercentage}% of failures are defects that happen while the paid warranty overlaps your free cover (maker's warranty or your legal rights). You'd be protected even without it.`;
+  const ewDefectOverlapTooltip =`${evaluation.ewTrack.overlapDefectRiskPercentage}% of failures are defects that happen while the paid warranty overlaps your free cover (maker's warranty or your legal rights). The paid warranty makes you use those remedies first, so this slice is worth $0.`;
   const ewDefectPostTooltip = `${evaluation.ewTrack.postAclDefectRiskPercentage}% of failures are defects in the stretch where only the paid warranty covers you. This is the part that earns its keep.`;
   const ewAccOverlapTooltip = `${evaluation.ewTrack.overlapAccidentalRiskPercentage}% of failures are accidental damage (drops, spills) while the paid warranty overlaps your free cover. You'd be protected even without it.`;
   const ewAccPostTooltip = `${evaluation.ewTrack.postAclAccidentalRiskPercentage}% of failures are accidental damage in the stretch where only the paid warranty covers you.`;
+  const ccRedundant =
+    ccExtensionMonths > 0 &&
+    evaluation.estimatedAclYears > 0 &&
+    evaluation.estimatedAclYears * 12 >= mfrYears * 12 + ccExtensionMonths;
   const ccTooltip =
     ccExtensionMonths > 0
-      ? `${evaluation.ccTrack.riskPercentage}% of failures (all defects) happen in the extra months your credit card adds to the maker's warranty${ccExcess > 0 ? ` (a ${ccExcess} excess applies per claim)` : ' (no excess)'}.`
+      ? ccRedundant
+        ? `${evaluation.ccTrack.riskPercentage}% of failures (all defects) happen in the extra months your credit card adds — but your legal rights already cover this whole stretch, so the extension is worth $0 here.`
+        : `${evaluation.ccTrack.riskPercentage}% of failures (all defects) happen in the extra months your credit card adds to the maker's warranty${ccExcess > 0 ? ` (a ${ccExcess} excess applies per claim)` : ' (no excess)'}.`
       : 'No credit card extension — add one in step 2 if your card offers it.';
   const uncoveredTooltip =
     evaluation.uncovered.riskPercentage > 0
@@ -304,7 +311,7 @@ export default function NumbersSection({
             label="Paid warranty — defects"
             gridlines={gridlines}
             segments={[
-              { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapDefectRiskPercentage, color: LIME, text: 'light', tooltip: ewDefectOverlapTooltip },
+              { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapDefectRiskPercentage, color: LIME, text: 'light', tooltip: ewDefectOverlapTooltip, label: '$0' },
               { leftPct: trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclDefectRiskPercentage, color: '#93d95e', text: 'light', tooltip: ewDefectPostTooltip },
             ]}
           />
@@ -321,7 +328,7 @@ export default function NumbersSection({
           <TrackBar
             label="Credit card"
             gridlines={gridlines}
-            segments={[{ leftPct: trackPcts.mfr, widthPct: trackPcts.cc, riskPct: evaluation.ccTrack.riskPercentage, color: ORANGE, text: 'light', tooltip: ccTooltip }]}
+            segments={[{ leftPct: trackPcts.mfr, widthPct: trackPcts.cc, riskPct: evaluation.ccTrack.riskPercentage, color: ORANGE, text: 'light', tooltip: ccTooltip, label: ccRedundant ? '$0' : undefined }]}
           />
           {evaluation.uncovered.riskPercentage > 0 && (
             <TrackBar
@@ -356,7 +363,7 @@ export default function NumbersSection({
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundImage: ACC_STRIPES, backgroundColor: NAVY }} /> Striped = accidental damage</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: NAVY }} /> Maker's warranty</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: TEAL }} /> Your legal rights</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (from purchase, also covered free)</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (from purchase, overlaps free cover — defect slice worth $0)</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#93d95e' }} /> Paid warranty (only this covers you)</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: ORANGE }} /> Credit card extension</span>
           {evaluation.uncovered.riskPercentage > 0 && (
