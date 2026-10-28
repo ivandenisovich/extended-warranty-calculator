@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@netlify/plugin-nextjs": "^5.16.4",
-    "next": "^15.5.28",
+    "next": "^15.4.11",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "recharts": "^3.10.1"
@@ -21,7 +21,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "^15.5.28",
+    "eslint-config-next": "^15.4.11",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
