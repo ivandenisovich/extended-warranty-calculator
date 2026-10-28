@@ -29,6 +29,21 @@ interface Segment {
   tooltip: string;
 }
 
+// Green/red with opacity scaled to how good the combination is: full green at
+// the best net value, full red at the worst, transparent at $0 break-even.
+const LIME_RGB = '118, 196, 34';
+const RED_RGB = '219, 36, 87';
+function matrixColor(netValue: number, best: number, worst: number): string {
+  const span = best - worst;
+  if (span <= 0) return netValue >= 0 ? `rgba(${LIME_RGB}, 1)` : `rgba(${RED_RGB}, 1)`;
+  const intensity =
+    netValue >= 0
+      ? 0.25 + 0.75 * (netValue / best) // $0 → 25% green, best → full green
+      : 0.25 + 0.75 * (netValue / worst); // $0 → 25% red, worst → full red
+  const rgb = netValue >= 0 ? LIME_RGB : RED_RGB;
+  return `rgba(${rgb}, ${intensity.toFixed(3)})`;
+}
+
 function TrackBar({
   label,
   segments,
@@ -98,6 +113,9 @@ export default function NumbersSection({
   onToggleExpert: () => void;
 }) {
   const isAustralia = evaluation.estimatedAclYears > 0;
+  const flatNet = evaluation.matrix.grid.flat();
+  const bestNet = Math.max(...flatNet.map((c) => c.netValue), 0);
+  const worstNet = Math.min(...flatNet.map((c) => c.netValue), 0);
   const totalMonths = Math.max(1, ownershipYears * 12);
   const pct = (months: number) => Math.min(100, (months / totalMonths) * 100);
 
@@ -323,8 +341,9 @@ export default function NumbersSection({
       <section className="bg-tc-surface border border-tc-border rounded-2xl p-5 md:p-6 shadow-sm">
         <h3 className="font-display text-base font-bold text-tc-navy mb-1">Every price &amp; excess combination</h3>
         <p className="text-xs text-tc-muted mb-4 leading-relaxed">
-          Green means the warranty pays its way at that price and excess. Red means you'd expect to
-          lose money. Values shown are your average gain or loss in dollars.
+          Deeper green means the warranty pays its way at that price and excess; deeper red means
+          you'd expect to lose more money. Pale cells are close to break-even ($0). Values shown are
+          your average gain or loss in dollars.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-center text-xs border-collapse">
@@ -356,13 +375,8 @@ export default function NumbersSection({
                   {row.map((cell, cIdx) => (
                     <td key={cIdx} className="p-1">
                       <div
-                        className={`py-1.5 px-2 rounded-md font-bold font-numeric transition-colors ${
-                          cell.status === 'positive'
-                            ? 'bg-tc-lime text-tc-navy'
-                            : cell.status === 'neutral'
-                              ? 'bg-tc-orange text-white'
-                              : 'bg-tc-red text-white'
-                        }`}
+                        className="py-1.5 px-2 rounded-md font-bold font-numeric transition-colors text-tc-navy"
+                        style={{ backgroundColor: matrixColor(cell.netValue, bestNet, worstNet) }}
                       >
                         {cell.netValue >= 0 ? `+${cell.netValue}` : `-${Math.abs(cell.netValue)}`}
                       </div>
