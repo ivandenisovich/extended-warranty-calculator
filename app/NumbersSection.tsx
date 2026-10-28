@@ -20,29 +20,52 @@ const ORANGE = '#e35125';
 const RED = '#db2457';
 const NAVY = '#182c49';
 
+interface Segment {
+  leftPct: number;
+  widthPct: number;
+  riskPct: number;
+  color: string;
+  text?: 'dark' | 'light';
+  tooltip: string;
+}
+
 function TrackBar({
   label,
   segments,
+  gridlines,
 }: {
   label: string;
-  segments: { leftPct: number; widthPct: number; riskPct: number; color: string; text?: 'dark' | 'light' }[];
+  segments: Segment[];
+  gridlines: number[];
 }) {
   return (
     <div className="grid grid-cols-12 items-center gap-2">
       <span className="col-span-3 md:col-span-2 text-xs font-medium text-tc-navy pr-2 text-right leading-tight">
         {label}
       </span>
-      <div className="col-span-9 md:col-span-10 bg-tc-teal-light/60 h-7 rounded-lg relative overflow-hidden flex items-center">
+      <div className="col-span-9 md:col-span-10 bg-tc-teal-light/60 h-7 rounded-lg relative flex items-center">
+        {gridlines.map((g, i) =>
+          g > 0 && g < 100 ? (
+            <div key={`g${i}`} className="absolute top-0 bottom-0 w-px bg-white/40 pointer-events-none" style={{ left: `${g}%` }} />
+          ) : null
+        )}
         {segments.map((s, i) =>
           s.widthPct > 0 ? (
             <div
               key={i}
               className={`absolute top-0 bottom-0 flex items-center justify-center text-[11px] font-bold font-numeric transition-all duration-300 ${
                 s.text === 'light' ? 'text-white' : 'text-tc-navy'
-              }`}
+              } ${s.leftPct <= 0.01 ? 'rounded-l-lg' : ''} ${s.leftPct + s.widthPct >= 99.9 ? 'rounded-r-lg' : ''}`}
               style={{ left: `${s.leftPct}%`, width: `${Math.max(s.widthPct, 1)}%`, backgroundColor: s.color }}
             >
-              {s.widthPct > 9 ? `${s.riskPct}%` : ''}
+              {s.widthPct > 9 ? (
+                <span className="group relative cursor-help">
+                  {s.riskPct}%
+                  <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block w-44 rounded-lg bg-tc-navy text-white text-[10px] font-normal font-sans px-2.5 py-1.5 text-center leading-snug shadow-lg z-20">
+                    {s.tooltip}
+                  </span>
+                </span>
+              ) : null}
             </div>
           ) : null
         )}
@@ -56,6 +79,7 @@ export default function NumbersSection({
   ownershipYears,
   mfrYears,
   ccExtensionMonths,
+  ccExcess,
   assumptions,
   onAssumptionsChange,
   categoryKey,
@@ -66,6 +90,7 @@ export default function NumbersSection({
   ownershipYears: number;
   mfrYears: number;
   ccExtensionMonths: number;
+  ccExcess: number;
   assumptions: Assumptions;
   onAssumptionsChange: (a: Assumptions) => void;
   categoryKey: string;
@@ -87,6 +112,22 @@ export default function NumbersSection({
     ewPostAcl: pct(postAclMonths),
     cc: pct(ccExtensionMonths),
   };
+
+  // Time axis: one tick per year of ownership, centred in each year band.
+  const yearTicks = Array.from({ length: ownershipYears }, (_, i) => ({
+    pct: ((i + 0.5) / ownershipYears) * 100,
+    label: `Yr ${i + 1}`,
+  }));
+  const gridlines = Array.from({ length: ownershipYears + 1 }, (_, i) => (i / ownershipYears) * 100);
+
+  const mfrTooltip = `${evaluation.mfrTrack.riskPercentage}% of the expected failures happen while the maker's warranty covers you — this risk is covered free.`;
+  const aclExtraTooltip = `A further ${+(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1)}% of failures happen after the maker's warranty ends but while your legal rights still cover you — also free.`;
+  const ewOverlapTooltip = `${evaluation.ewTrack.overlapRiskPercentage}% of failures happen while the paid warranty overlaps your free cover — you'd be protected even without it.`;
+  const ewPostTooltip = `${evaluation.ewTrack.postAclRiskPercentage}% of failures happen where only the paid warranty covers you — this is the part that earns its keep.`;
+  const ccTooltip =
+    ccExtensionMonths > 0
+      ? `${evaluation.ccTrack.riskPercentage}% of failures happen in the extra months your credit card adds to the maker's warranty${ccExcess > 0 ? ` (a ${ccExcess} excess applies per claim)` : ' (no excess)'}.`
+      : 'No credit card extension — add one in step 2 if your card offers it.';
 
   return (
     <div className="space-y-5">
@@ -176,34 +217,59 @@ export default function NumbersSection({
       <section className="bg-tc-surface border border-tc-border rounded-2xl p-5 md:p-6 shadow-sm">
         <h3 className="font-display text-base font-bold text-tc-navy mb-1">Who covers what, when</h3>
         <p className="text-xs text-tc-muted mb-4 leading-relaxed">
-          Each bar shows one layer of protection across your ownership. Wider coloured sections mean more
-          of your failure risk falls in that period.
+          Each bar shows one layer of protection across your ownership. The percentage on each section is
+          the share of expected failures that falls in that period — hover it for an explanation.
         </p>
         <div className="space-y-2.5">
           <TrackBar
             label="Maker's warranty"
-            segments={[{ leftPct: 0, widthPct: trackPcts.mfr, riskPct: evaluation.mfrTrack.riskPercentage, color: NAVY, text: 'light' }]}
+            gridlines={gridlines}
+            segments={[{ leftPct: 0, widthPct: trackPcts.mfr, riskPct: evaluation.mfrTrack.riskPercentage, color: NAVY, text: 'light', tooltip: mfrTooltip }]}
           />
           {isAustralia && (
             <TrackBar
               label="Your legal rights (ACL)"
+              gridlines={gridlines}
               segments={[
-                { leftPct: 0, widthPct: trackPcts.mfr, riskPct: evaluation.mfrTrack.riskPercentage, color: TEAL, text: 'light' },
-                { leftPct: trackPcts.mfr, widthPct: trackPcts.aclExtra, riskPct: +(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1), color: '#5fb0b6', text: 'light' },
+                { leftPct: 0, widthPct: trackPcts.mfr, riskPct: evaluation.mfrTrack.riskPercentage, color: TEAL, text: 'light', tooltip: mfrTooltip },
+                { leftPct: trackPcts.mfr, widthPct: trackPcts.aclExtra, riskPct: +(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1), color: '#5fb0b6', text: 'light', tooltip: aclExtraTooltip },
               ]}
             />
           )}
           <TrackBar
             label="Paid warranty"
+            gridlines={gridlines}
             segments={[
-              { leftPct: trackPcts.ewStart, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapRiskPercentage, color: LIME, text: 'light' },
-              { leftPct: trackPcts.ewStart + trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclRiskPercentage, color: '#93d95e', text: 'light' },
+              { leftPct: trackPcts.ewStart, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapRiskPercentage, color: LIME, text: 'light', tooltip: ewOverlapTooltip },
+              { leftPct: trackPcts.ewStart + trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclRiskPercentage, color: '#93d95e', text: 'light', tooltip: ewPostTooltip },
             ]}
           />
           <TrackBar
             label="Credit card"
-            segments={[{ leftPct: trackPcts.mfr, widthPct: trackPcts.cc, riskPct: evaluation.ccTrack.riskPercentage, color: ORANGE, text: 'light' }]}
+            gridlines={gridlines}
+            segments={[{ leftPct: trackPcts.mfr, widthPct: trackPcts.cc, riskPct: evaluation.ccTrack.riskPercentage, color: ORANGE, text: 'light', tooltip: ccTooltip }]}
           />
+        </div>
+        {/* Time axis */}
+        <div className="grid grid-cols-12 gap-2 mt-1.5">
+          <span className="col-span-3 md:col-span-2" />
+          <div className="col-span-9 md:col-span-10 relative h-5">
+            {yearTicks.map((t) => (
+              <span
+                key={t.label}
+                className="absolute -translate-x-1/2 text-[10px] font-numeric text-tc-muted whitespace-nowrap"
+                style={{ left: `${t.pct}%` }}
+              >
+                {t.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-12 gap-2">
+          <span className="col-span-3 md:col-span-2" />
+          <div className="col-span-9 md:col-span-10 text-center text-[10px] text-tc-muted">
+            time since purchase
+          </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-tc-muted">
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: NAVY }} /> Maker's warranty</span>
@@ -263,8 +329,19 @@ export default function NumbersSection({
         <div className="overflow-x-auto">
           <table className="w-full text-center text-xs border-collapse">
             <thead>
+              <tr>
+                <th className="py-1 px-3 text-left align-bottom">
+                  <span className="text-[11px] font-semibold text-tc-navy">Warranty price ↓</span>
+                </th>
+                <th
+                  colSpan={evaluation.matrix.excesses.length}
+                  className="py-1 px-2 text-center font-semibold text-tc-navy"
+                >
+                  <span className="text-[11px]">Excess per claim ($)</span>
+                </th>
+              </tr>
               <tr className="border-b border-tc-border text-tc-muted">
-                <th className="py-2 px-3 text-left font-semibold">Price \ Excess</th>
+                <th className="py-2 px-3" />
                 {evaluation.matrix.excesses.map((exc) => (
                   <th key={exc} className="py-2 px-2 font-numeric font-semibold">${exc}</th>
                 ))}

@@ -181,6 +181,7 @@ export default function Home() {
             ownershipYears={form.ownershipYears}
             mfrYears={form.mfrYears}
             ccExtensionMonths={form.ccExtensionMonths}
+            ccExcess={form.ccExcess}
             assumptions={form.assumptions}
             onAssumptionsChange={(a: Assumptions) => setForm((p) => ({ ...p, assumptions: a }))}
             categoryKey={form.productCategory}
