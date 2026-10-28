@@ -44,14 +44,43 @@ async function safeFetch(url: string): Promise<Response> {
       signal: controller.signal,
       headers: {
         'User-Agent': UA,
-        Accept: 'text/html,application/xhtml+xml',
+        Accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-AU,en;q=0.9',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
       },
       redirect: 'manual',
     });
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Bot-protection challenge pages return HTTP 200 with real HTML, so a naive
+// fetch "succeeds" but the content is a blocker page, not a product. Detect
+// the common markers and report them as blocked instead of extracting garbage
+// like the product name "Pardon Our Interruption".
+const BOT_BLOCK_PATTERNS = [
+  /pardon our interruption/i,
+  /access to this (?:page|site) has been denied/i,
+  /<title>[^<]*access denied[^<]*<\/title>/i,
+  /<title>[^<]*just a moment[^<]*<\/title>/i,
+  /<title>[^<]*attention required[^<]*<\/title>/i,
+  /request unsuccessful\. incapsula/i,
+  /distil_?router/i,
+  /captcha-delivery\.com/i,
+  /cf-chl\b|challenge-platform\//i,
+  /please verify (?:that )?you(?:'| a)?re? (?:a )?human/i,
+  /are you a robot/i,
+];
+
+function isBotBlock(html: string): boolean {
+  const head = html.slice(0, 50_000);
+  return BOT_BLOCK_PATTERNS.some((p) => p.test(head) || p.test(html));
 }
 
 export async function GET(request: NextRequest) {
@@ -150,7 +179,10 @@ export async function GET(request: NextRequest) {
 
   if (!html) return json(errorBody('blocked'), 502);
 
+  if (isBotBlock(html)) return json(errorBody('blocked'), 502);
+
   const product = extractProduct(html, currentUrl.toString());
+  if (product && isBotBlock(product.name)) return json(errorBody('blocked'), 502);
   return json({
     ok: true,
     product,
