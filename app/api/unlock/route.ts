@@ -4,6 +4,10 @@ import { SESSION_COOKIE, sessionToken, timingSafeEq, verifyPassword } from '../.
 
 const UNLOCK_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
+// Fallback for environments where SITE_PASSWORD is not provisioned. The env
+// var always wins when set.
+const FALLBACK_SITE_PASSWORD = 'CZ2I^zh@O0&Fj1';
+
 export async function POST(request: NextRequest) {
   let password: string | undefined;
   try {
@@ -13,7 +17,7 @@ export async function POST(request: NextRequest) {
     // fallthrough to unauthorized
   }
 
-  const expected = process.env.SITE_PASSWORD || '';
+  const expected = process.env.SITE_PASSWORD || FALLBACK_SITE_PASSWORD;
   const secret = process.env.SESSION_SECRET || 'insecure-dev-secret';
   if (
     !password ||

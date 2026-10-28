@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE, sessionToken, timingSafeEq } from './lib/auth';
 
 export async function middleware(request: NextRequest) {
-  const expected = await sessionToken(process.env.SESSION_SECRET || '');
+  const expected = await sessionToken(process.env.SESSION_SECRET || 'insecure-dev-secret');
   const cookie = request.cookies.get(SESSION_COOKIE)?.value ?? '';
 
   if (timingSafeEq(cookie, expected)) {
