@@ -13,6 +13,20 @@ import {
   Legend,
 } from 'recharts';
 import { evaluateWarranty, CATEGORIES } from './warrantyEngine';
+import AssumptionsPanel, { type Assumptions } from './AssumptionsPanel';
+import BreakEvenCard from './BreakEvenCard';
+
+const CATEGORY_DEFAULTS: Record<string, Assumptions> = Object.fromEntries(
+  Object.entries(CATEGORIES).map(([key, cat]) => [
+    key,
+    {
+      failureRate: cat.failureRate,
+      accidentalShare: Math.round(cat.accidentalShare * 100),
+      repairRatio: Math.round(cat.repairRatio * 100),
+      hazard: { infantStrength: 0.6, infantDecay: 1.2, background: 0.2, wearOutStrength: 0.5, accidentalFrontLoad: 0 },
+    },
+  ])
+);
 
 export default function Home() {
   const [productCategory, setProductCategory] = useState('smartphones');
@@ -25,6 +39,14 @@ export default function Home() {
   const [frictionCost, setFrictionCost] = useState(50);
   const [ccExtensionMonths, setCcExtensionMonths] = useState(12);
   const [ccExcess, setCcExcess] = useState(50);
+  const [assumptionsOpen, setAssumptionsOpen] = useState(false);
+  const [assumptions, setAssumptions] = useState<Assumptions>(CATEGORY_DEFAULTS['smartphones']);
+
+  // When the category changes, reset assumptions to that category's defaults
+  const handleCategoryChange = (key: string) => {
+    setProductCategory(key);
+    setAssumptions(CATEGORY_DEFAULTS[key] ?? CATEGORY_DEFAULTS['smartphones']);
+  };
 
   const evaluation = useMemo(() => {
     return evaluateWarranty({
@@ -38,6 +60,10 @@ export default function Home() {
       jurisdiction,
       includesAccidental,
       frictionCost: Number(frictionCost) || 0,
+      failureRate: Number(assumptions.failureRate) || 0,
+      accidentalShare: (Number(assumptions.accidentalShare) || 0) / 100,
+      repairRatio: (Number(assumptions.repairRatio) || 0) / 100,
+      hazard: assumptions.hazard,
     });
   }, [
     productPrice,
@@ -50,6 +76,7 @@ export default function Home() {
     jurisdiction,
     includesAccidental,
     frictionCost,
+    assumptions,
   ]);
 
   const isAustralia = jurisdiction === 'australia';
@@ -92,7 +119,7 @@ export default function Home() {
             </label>
             <select
               value={productCategory}
-              onChange={(e) => setProductCategory(e.target.value)}
+              onChange={(e) => handleCategoryChange(e.target.value)}
               className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
             >
               {Object.entries(CATEGORIES).map(([key, cat]) => (
@@ -124,11 +151,11 @@ export default function Home() {
               </div>
             )}
             <div className="flex justify-between items-center">
-              <span className="text-slate-400">Est. Repair Cost:</span>
+              <span className="text-slate-400">Assumed Repair Cost:</span>
               <strong className="text-slate-100 font-bold">${evaluation.repairCost}</strong>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-slate-400">{ownershipYears}-Yr Failure Risk:</span>
+              <span className="text-slate-400">Assumed Failure Risk ({ownershipYears}-Yr):</span>
               <strong className="text-slate-100 font-bold">{evaluation.totalFailureRatePct}%</strong>
             </div>
             <div className="flex justify-between items-center">
@@ -139,6 +166,36 @@ export default function Home() {
               <span className="text-slate-400">EW Net Risk Value (Post-ACL + Accidental):</span>
               <strong className="text-emerald-400 font-bold">{evaluation.ewTrack.netRiskPercentage}%</strong>
             </div>
+            <div className="flex justify-between items-center pt-2 border-t border-slate-800/60">
+              <span className="text-slate-400">Break-Even Premium ($0 excess):</span>
+              <strong className="text-emerald-400 font-bold">${evaluation.breakEven.atZeroExcess}</strong>
+            </div>
+          </div>
+
+          {/* Advanced Assumptions Panel */}
+          <div className="bg-[#0a0d14] border border-slate-800/80 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setAssumptionsOpen(!assumptionsOpen)}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800/30 transition-colors"
+            >
+              <span>Advanced Assumptions</span>
+              <span
+                className={`text-slate-500 transition-transform duration-200 ${
+                  assumptionsOpen ? 'rotate-180' : ''
+                }`}
+              >
+                ▼
+              </span>
+            </button>
+            {assumptionsOpen && (
+              <div className="px-3.5 pb-3.5 pt-1 border-t border-slate-800/60">
+                <AssumptionsPanel
+                  categoryKey={productCategory}
+                  assumptions={assumptions}
+                  onChange={setAssumptions}
+                />
+              </div>
+            )}
           </div>
 
           <div>
@@ -426,7 +483,10 @@ export default function Home() {
 
           </div>
 
-          {/* CARD 2: EXTENDED WARRANTY NET VALUE MATRIX */}
+          {/* CARD 2: BREAK-EVEN PREMIUM */}
+          <BreakEvenCard evaluation={evaluation} />
+
+          {/* CARD 3: EXTENDED WARRANTY NET VALUE MATRIX */}
           <div className="bg-[#111622] border border-slate-800/80 rounded-xl p-5">
             <div className="flex justify-between items-start mb-2">
               <div>
