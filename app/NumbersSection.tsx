@@ -24,16 +24,11 @@ interface Segment {
   leftPct: number;
   widthPct: number;
   riskPct: number;
-  accPct?: number;
   color: string;
   text?: 'dark' | 'light';
   tooltip: string;
   label?: string;
 }
-
-// Diagonal white stripes over the segment colour mark the accidental-damage
-// slice of a bar (defects/failures are the solid part).
-const ACC_STRIPES = 'repeating-linear-gradient(45deg, transparent 0 3px, rgba(255,255,255,0.55) 3px 6px)';
 
 // Green/red with opacity scaled to how good the combination is: full green at
 // the best net value, full red at the worst, transparent at $0 break-even.
@@ -104,12 +99,6 @@ function TrackBar({
               } ${s.leftPct <= 0.01 ? 'rounded-l-lg' : ''} ${s.leftPct + s.widthPct >= 99.9 ? 'rounded-r-lg' : ''}`}
               style={{ left: `${s.leftPct}%`, width: `${Math.max(s.widthPct, 1)}%`, backgroundColor: s.color }}
             >
-              {s.accPct && s.accPct > 0 && s.riskPct > 0 ? (
-                <div
-                  className="absolute top-0 bottom-0 right-0 rounded-r-lg pointer-events-none"
-                  style={{ width: `${(s.accPct / s.riskPct) * 100}%`, backgroundImage: ACC_STRIPES }}
-                />
-              ) : null}
               {s.widthPct > 9 ? (
                 <span className="group relative cursor-help">
                   {s.label ?? `${s.riskPct}%`}
@@ -179,9 +168,9 @@ export default function NumbersSection({
 
   const mfrTooltip = `${evaluation.mfrTrack.riskPercentage}% of the expected failures (all defects — the maker's warranty never covers accidents) happen while the maker's warranty covers you. This risk is covered free.`;
   const aclExtraTooltip = `A further ${+(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1)}% of failures (all defects — your legal rights don't cover accidents) happen after the maker's warranty ends but while your legal rights still cover you. Also free.`;
-  const ewDefectOverlapTooltip =`${evaluation.ewTrack.overlapDefectRiskPercentage}% of failures are defects that happen while the paid warranty overlaps your free cover (maker's warranty or your legal rights). The paid warranty makes you use those remedies first, so this slice is worth $0.`;
+  const ewDefectOverlapTooltip =`${evaluation.ewTrack.overlapDefectRiskPercentage}% of failures are defects that happen while the paid warranty overlaps your free cover (maker's warranty or your legal rights). The paid warranty makes you use those remedies first, so this slice adds 0% of extra cover.`;
   const ewDefectPostTooltip = `${evaluation.ewTrack.postAclDefectRiskPercentage}% of failures are defects in the stretch where only the paid warranty covers you. This is the part that earns its keep.`;
-  const ewAccOverlapTooltip = `${evaluation.ewTrack.overlapAccidentalRiskPercentage}% of failures are accidental damage (drops, spills) while the paid warranty overlaps your free cover. You'd be protected even without it.`;
+  const ewAccOverlapTooltip = `${evaluation.ewTrack.overlapAccidentalRiskPercentage}% of failures are accidental damage (drops, spills) while the paid warranty overlaps your free cover. This is the only remedy that covers accidents, so this slice is exactly where the paid warranty earns its keep.`;
   const ewAccPostTooltip = `${evaluation.ewTrack.postAclAccidentalRiskPercentage}% of failures are accidental damage in the stretch where only the paid warranty covers you.`;
   const ccRedundant =
     ccExtensionMonths > 0 &&
@@ -311,7 +300,7 @@ export default function NumbersSection({
             label="Paid warranty — defects"
             gridlines={gridlines}
             segments={[
-              { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapDefectRiskPercentage, color: LIME, text: 'light', tooltip: ewDefectOverlapTooltip, label: '$0' },
+              { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapDefectRiskPercentage, color: LIME, text: 'light', tooltip: ewDefectOverlapTooltip, label: '0%' },
               { leftPct: trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclDefectRiskPercentage, color: '#93d95e', text: 'light', tooltip: ewDefectPostTooltip },
             ]}
           />
@@ -328,13 +317,13 @@ export default function NumbersSection({
           <TrackBar
             label="Credit card"
             gridlines={gridlines}
-            segments={[{ leftPct: trackPcts.mfr, widthPct: trackPcts.cc, riskPct: evaluation.ccTrack.riskPercentage, color: ORANGE, text: 'light', tooltip: ccTooltip, label: ccRedundant ? '$0' : undefined }]}
+            segments={[{ leftPct: trackPcts.mfr, widthPct: trackPcts.cc, riskPct: evaluation.ccTrack.riskPercentage, color: ORANGE, text: 'light', tooltip: ccTooltip, label: ccRedundant ? '0%' : undefined }]}
           />
           {evaluation.uncovered.riskPercentage > 0 && (
             <TrackBar
               label="Not covered"
               gridlines={gridlines}
-              segments={[{ leftPct: uncoveredStartPct, widthPct: trackPcts.uncovered, riskPct: evaluation.uncovered.riskPercentage, accPct: evaluation.uncovered.accidentalRiskPercentage, color: '#b7bdc9', text: 'dark', tooltip: uncoveredTooltip }]}
+              segments={[{ leftPct: uncoveredStartPct, widthPct: trackPcts.uncovered, riskPct: evaluation.uncovered.riskPercentage, color: '#b7bdc9', text: 'dark', tooltip: uncoveredTooltip }]}
             />
           )}
         </div>
@@ -360,7 +349,6 @@ export default function NumbersSection({
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-tc-muted">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ backgroundImage: ACC_STRIPES, backgroundColor: NAVY }} /> Striped = accidental damage</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: NAVY }} /> Maker's warranty</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: TEAL }} /> Your legal rights</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (from purchase, overlaps free cover — defect slice worth $0)</span>
