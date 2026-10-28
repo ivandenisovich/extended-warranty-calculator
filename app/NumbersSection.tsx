@@ -28,6 +28,7 @@ interface Segment {
   text?: 'dark' | 'light';
   tooltip: string;
   label?: string;
+  striped?: boolean;
 }
 
 // Green/red with opacity scaled to how good the combination is: full green at
@@ -70,6 +71,37 @@ function matrixColor(netValue: number, best: number, worst: number): { bg: strin
   return { bg: `rgba(${rgb}, ${alpha.toFixed(3)})`, light: whiteContrast > navyContrast };
 }
 
+function stripeBackground(color: string): string {
+  return `repeating-linear-gradient(45deg, ${color} 0 6px, #ffffff 6px 12px)`;
+}
+
+function TimeAxis({ ticks }: { ticks: { pct: number; label: string }[] }) {
+  return (
+    <>
+      <div className="grid grid-cols-12 gap-2 mt-1.5">
+        <span className="col-span-3 md:col-span-2" />
+        <div className="col-span-9 md:col-span-10 relative h-5">
+          {ticks.map((t) => (
+            <span
+              key={t.label}
+              className="absolute -translate-x-1/2 text-[11px] font-numeric text-tc-muted whitespace-nowrap"
+              style={{ left: `${t.pct}%` }}
+            >
+              {t.label}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-12 gap-2">
+        <span className="col-span-3 md:col-span-2" />
+        <div className="col-span-9 md:col-span-10 text-center text-[11px] text-tc-muted">
+          time since purchase
+        </div>
+      </div>
+    </>
+  );
+}
+
 function TrackBar({
   label,
   segments,
@@ -95,12 +127,17 @@ function TrackBar({
             <div
               key={i}
               className={`absolute top-0 bottom-0 flex items-center justify-center text-[11px] font-bold font-numeric transition-all duration-300 ${
-                s.text === 'light' ? 'text-white' : 'text-tc-navy'
+                s.text === 'light' && !s.striped ? 'text-white' : 'text-tc-navy'
               } ${s.leftPct <= 0.01 ? 'rounded-l-lg' : ''} ${s.leftPct + s.widthPct >= 99.9 ? 'rounded-r-lg' : ''}`}
-              style={{ left: `${s.leftPct}%`, width: `${Math.max(s.widthPct, 1)}%`, backgroundColor: s.color }}
+              style={{
+                left: `${s.leftPct}%`,
+                width: `${Math.max(s.widthPct, 1)}%`,
+                backgroundColor: s.color,
+                backgroundImage: s.striped ? stripeBackground(s.color) : undefined,
+              }}
             >
               {s.widthPct > 9 ? (
-                <span className="group relative cursor-help">
+                <span className={`group relative cursor-help ${s.striped ? 'rounded bg-white/85 px-1' : ''}`}>
                   {s.label ?? `${s.riskPct}%`}
                   <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block w-44 rounded-lg bg-tc-navy text-white text-[11px] font-normal font-sans px-2.5 py-1.5 text-center leading-snug shadow-lg z-20">
                     {s.tooltip}
@@ -273,12 +310,12 @@ export default function NumbersSection({
 
       {/* Coverage timeline tracks */}
       <section className="bg-tc-surface border border-tc-border rounded-2xl p-5 md:p-6 shadow-sm">
-        <h3 className="font-display text-base font-bold text-tc-navy mb-1">Who covers what, when</h3>
+        <h3 className="font-display text-base font-bold text-tc-navy mb-1">Who covers defects, when</h3>
         <p className="text-xs text-tc-muted mb-4 leading-relaxed">
           Of the <strong className="text-tc-navy">{evaluation.totalFailureRatePct}%</strong> chance it
           breaks in {ownershipYears} {ownershipYears === 1 ? 'year' : 'years'} — the same figure shown in
-          the blue summary box — each bar shows which layer of cover picks up which slice. The percentage
-          on each section is that slice's share of expected failures; hover it for an explanation.
+          the blue summary box — these bars show which layer of cover picks up the defect share. Striped
+          slices are worth $0 because other cover already pays for them. Hover a percentage for details.
         </p>
         <div className="space-y-2.5">
           <TrackBar
@@ -300,24 +337,14 @@ export default function NumbersSection({
             label="Paid warranty — defects"
             gridlines={gridlines}
             segments={[
-              { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapDefectRiskPercentage, color: LIME, text: 'light', tooltip: ewDefectOverlapTooltip, label: '0%' },
+              { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapDefectRiskPercentage, color: LIME, text: 'light', tooltip: ewDefectOverlapTooltip, label: '0%', striped: true },
               { leftPct: trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclDefectRiskPercentage, color: '#93d95e', text: 'light', tooltip: ewDefectPostTooltip },
             ]}
           />
-          {includesAccidental && (
-            <TrackBar
-              label="Paid warranty — accidental damage"
-              gridlines={gridlines}
-              segments={[
-                { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapAccidentalRiskPercentage, color: LIME, text: 'light', tooltip: ewAccOverlapTooltip },
-                { leftPct: trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclAccidentalRiskPercentage, color: '#93d95e', text: 'light', tooltip: ewAccPostTooltip },
-              ]}
-            />
-          )}
           <TrackBar
             label="Credit card"
             gridlines={gridlines}
-            segments={[{ leftPct: trackPcts.mfr, widthPct: trackPcts.cc, riskPct: evaluation.ccTrack.riskPercentage, color: ORANGE, text: 'light', tooltip: ccTooltip, label: ccRedundant ? '0%' : undefined }]}
+            segments={[{ leftPct: trackPcts.mfr, widthPct: trackPcts.cc, riskPct: evaluation.ccTrack.riskPercentage, color: ORANGE, text: 'light', tooltip: ccTooltip, label: ccRedundant ? '0%' : undefined, striped: ccRedundant }]}
           />
           {evaluation.uncovered.riskPercentage > 0 && (
             <TrackBar
@@ -327,38 +354,44 @@ export default function NumbersSection({
             />
           )}
         </div>
-        {/* Time axis */}
-        <div className="grid grid-cols-12 gap-2 mt-1.5">
-          <span className="col-span-3 md:col-span-2" />
-          <div className="col-span-9 md:col-span-10 relative h-5">
-            {yearTicks.map((t) => (
-              <span
-                key={t.label}
-                className="absolute -translate-x-1/2 text-[11px] font-numeric text-tc-muted whitespace-nowrap"
-                style={{ left: `${t.pct}%` }}
-              >
-                {t.label}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-12 gap-2">
-          <span className="col-span-3 md:col-span-2" />
-          <div className="col-span-9 md:col-span-10 text-center text-[11px] text-tc-muted">
-            time since purchase
-          </div>
-        </div>
+        <TimeAxis ticks={yearTicks} />
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-tc-muted">
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: NAVY }} /> Manufacturer's warranty</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: TEAL }} /> Your legal rights</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (from purchase, overlaps free cover — defect slice worth $0)</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (overlaps free cover)</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#93d95e' }} /> Paid warranty (only this covers you)</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: ORANGE }} /> Credit card extension</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: stripeBackground('#9aa5b8') }} /> Striped: worth $0 here, other cover already pays</span>
           {evaluation.uncovered.riskPercentage > 0 && (
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#b7bdc9' }} /> Not covered by anything — you carry this risk</span>
           )}
         </div>
       </section>
+
+      {includesAccidental && (
+        <section className="bg-tc-surface border border-tc-border rounded-2xl p-5 md:p-6 shadow-sm">
+          <h3 className="font-display text-base font-bold text-tc-navy mb-1">Who covers accidents, when</h3>
+          <p className="text-xs text-tc-muted mb-4 leading-relaxed">
+            Accidental damage such as drops and spills is only covered by the paid warranty. These bars show
+            the share of accident failures it picks up and when. Hover a percentage for details.
+          </p>
+          <div className="space-y-2.5">
+            <TrackBar
+              label="Paid warranty — accidental damage"
+              gridlines={gridlines}
+              segments={[
+                { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapAccidentalRiskPercentage, color: LIME, text: 'light', tooltip: ewAccOverlapTooltip },
+                { leftPct: trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclAccidentalRiskPercentage, color: '#93d95e', text: 'light', tooltip: ewAccPostTooltip },
+              ]}
+            />
+          </div>
+          <TimeAxis ticks={yearTicks} />
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-tc-muted">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (overlaps free cover)</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#93d95e' }} /> Paid warranty (only this covers you)</span>
+          </div>
+        </section>
+      )}
 
       {/* Break-even detail */}
       <section className="bg-tc-surface border border-tc-border rounded-2xl p-5 md:p-6 shadow-sm">
