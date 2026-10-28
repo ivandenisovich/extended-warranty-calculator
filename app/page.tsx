@@ -141,7 +141,7 @@ export default function Home() {
                 </div>
                 {form.jurisdiction === 'australia' && (
                   <div className="flex justify-between items-baseline gap-3">
-                    <dt className="text-white/70">Free legal cover lasts</dt>
+                    <dt className="text-white/70">Estimated coverage Australian Consumer Law</dt>
                     <dd className="font-numeric font-bold text-lg">
                       {evaluation.estimatedAclYears} {evaluation.estimatedAclYears === 1 ? 'yr' : 'yrs'}
                     </dd>
