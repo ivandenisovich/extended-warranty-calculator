@@ -183,7 +183,7 @@ export default function InputFlow({
               className={inputCls}
             />
           </Field>
-          <Field label="Extended warranty (years)" hint="Total extra years you'd be paying for.">
+          <Field label="Extended warranty (years)" hint="Years of paid cover from the day you buy — it starts at purchase, not after the maker's warranty ends.">
             <input
               type="number"
               min={0}

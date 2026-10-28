@@ -120,12 +120,10 @@ export default function NumbersSection({
   const pct = (months: number) => Math.min(100, (months / totalMonths) * 100);
 
   const mfrWidthPct = pct(mfrYears * 12);
-  const ewStartPct = pct(mfrYears * 12);
   const { overlapMonths, postAclMonths } = evaluation.ewTrack;
   const trackPcts = {
     mfr: mfrWidthPct,
     aclExtra: pct(evaluation.estimatedAclYears * 12) - mfrWidthPct,
-    ewStart: ewStartPct,
     ewOverlap: pct(overlapMonths),
     ewPostAcl: pct(postAclMonths),
     cc: pct(ccExtensionMonths),
@@ -140,7 +138,7 @@ export default function NumbersSection({
 
   const mfrTooltip = `${evaluation.mfrTrack.riskPercentage}% of the expected failures happen while the maker's warranty covers you — this risk is covered free.`;
   const aclExtraTooltip = `A further ${+(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1)}% of failures happen after the maker's warranty ends but while your legal rights still cover you — also free.`;
-  const ewOverlapTooltip = `${evaluation.ewTrack.overlapRiskPercentage}% of failures happen while the paid warranty overlaps your free cover — you'd be protected even without it.`;
+  const ewOverlapTooltip = `${evaluation.ewTrack.overlapRiskPercentage}% of failures happen while the paid warranty overlaps your free cover (maker's warranty or your legal rights) — you'd be protected even without it.`;
   const ewPostTooltip = `${evaluation.ewTrack.postAclRiskPercentage}% of failures happen where only the paid warranty covers you — this is the part that earns its keep.`;
   const ccTooltip =
     ccExtensionMonths > 0
@@ -258,8 +256,8 @@ export default function NumbersSection({
             label="Paid warranty"
             gridlines={gridlines}
             segments={[
-              { leftPct: trackPcts.ewStart, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapRiskPercentage, color: LIME, text: 'light', tooltip: ewOverlapTooltip },
-              { leftPct: trackPcts.ewStart + trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclRiskPercentage, color: '#93d95e', text: 'light', tooltip: ewPostTooltip },
+              { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapRiskPercentage, color: LIME, text: 'light', tooltip: ewOverlapTooltip },
+              { leftPct: trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclRiskPercentage, color: '#93d95e', text: 'light', tooltip: ewPostTooltip },
             ]}
           />
           <TrackBar
@@ -292,7 +290,7 @@ export default function NumbersSection({
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-tc-muted">
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: NAVY }} /> Maker's warranty</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: TEAL }} /> Your legal rights</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (still also covered by law)</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (from purchase, also covered free)</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#93d95e' }} /> Paid warranty (only this covers you)</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: ORANGE }} /> Credit card extension</span>
         </div>

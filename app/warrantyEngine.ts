@@ -131,8 +131,8 @@ export interface TrackSummary {
 
 export interface EwTrackSummary {
   totalRiskPercentage: number;
-  overlapRiskPercentage: number; // Mfr end to ACL end
-  postAclRiskPercentage: number; // ACL end to EW end
+  overlapRiskPercentage: number; // Purchase to free cover end
+  postAclRiskPercentage: number; // Free cover end to EW end
   netRiskPercentage: number;    // Defect post-ACL + Accidental full lifetime
   hasOverlap: boolean;
   hasPostAcl: boolean;
@@ -260,7 +260,9 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
 
   const mfrMonths = mfrYears * 12;
   const aclMonths = estimatedAclYears * 12;
-  const ewEndMonths = mfrMonths + extendedWarrantyYears * 12;
+  // The paid warranty runs from purchase, so it overlaps both the maker's
+  // warranty and your ACL rights. It ends `extendedWarrantyYears` after buy.
+  const ewEndMonths = extendedWarrantyYears * 12;
   const ccEndMonths = mfrMonths + ccExtensionMonths;
 
   const defectWeights = hazardWeights.map((w) => w / cumulativeRisk);
@@ -289,7 +291,7 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
       aclRisk += pDefect;
     }
 
-    const activeEwStartMonth = Math.max(startMonth, mfrMonths + 1);
+    const activeEwStartMonth = startMonth;
     const activeEwEndMonth = Math.min(endMonth, ewEndMonths);
 
     if (activeEwStartMonth <= activeEwEndMonth) {
@@ -298,7 +300,9 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
       const ewDefectInYear = pDefect * monthFraction;
       const ewAccidentalInYear = includesAccidental ? pAccidental * monthFraction : 0;
 
-      const overlapEnd = Math.min(activeEwEndMonth, aclMonths);
+      // Free cover runs from purchase too: maker's warranty first, then ACL.
+      const freeEnd = Math.max(mfrMonths, isAustralia ? aclMonths : 0);
+      const overlapEnd = Math.min(activeEwEndMonth, freeEnd);
       if (overlapEnd >= activeEwStartMonth) {
         const overlapMonthsInYear = overlapEnd - activeEwStartMonth + 1;
         const f = overlapMonthsInYear / activeEwMonthsCount;
@@ -306,7 +310,7 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
         if (includesAccidental) ewNetRisk += ewAccidentalInYear * f;
       }
 
-      const postAclStart = Math.max(activeEwStartMonth, aclMonths + 1);
+      const postAclStart = Math.max(activeEwStartMonth, freeEnd + 1);
       if (postAclStart <= activeEwEndMonth) {
         const postMonthsInYear = activeEwEndMonth - postAclStart + 1;
         const f = postMonthsInYear / activeEwMonthsCount;
@@ -361,8 +365,9 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     grid.push(row);
   }
 
-  const overlapMonths = Math.max(0, Math.min(aclMonths, ewEndMonths) - mfrMonths);
-  const postAclMonths = Math.max(0, ewEndMonths - Math.max(mfrMonths, aclMonths));
+  const freeCoverEnd = Math.max(mfrMonths, isAustralia ? aclMonths : 0);
+  const overlapMonths = Math.max(0, Math.min(freeCoverEnd, ewEndMonths));
+  const postAclMonths = Math.max(0, ewEndMonths - freeCoverEnd);
 
   return {
     repairCost: Math.round(repairCost),
