@@ -16,7 +16,7 @@ export interface AssumptionsProps {
 }
 
 const inputCls =
-  'w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500';
+  'w-full bg-white border border-tc-border rounded-md px-2.5 py-1.5 text-xs text-tc-navy focus:outline-none focus:ring-2 focus:ring-tc-teal focus:border-transparent';
 
 function NumberField({
   label,
@@ -37,7 +37,7 @@ function NumberField({
 }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-slate-400 mb-1">{label}</span>
+      <span className="block text-[11px] text-tc-muted mb-1">{label}</span>
       <span className="relative block">
         <input
           type="number"
@@ -49,7 +49,7 @@ function NumberField({
           className={`${inputCls} ${suffix ? 'pr-7' : ''}`}
         />
         {suffix && (
-          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 pointer-events-none">
+          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-tc-muted pointer-events-none">
             {suffix}
           </span>
         )}
@@ -74,9 +74,9 @@ export default function AssumptionsPanel({ categoryKey, assumptions, onChange }:
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-slate-400 leading-relaxed">
+      <p className="text-xs text-tc-muted leading-relaxed">
         These assumptions drive every result on the page. Defaults are pre-filled from the{' '}
-        <strong className="text-slate-300">{defaultCat.name}</strong> category. Tune them to see how the
+        <strong className="text-tc-navy">{defaultCat.name}</strong> category. Tune them to see how the
         model&apos;s fair price moves.
       </p>
 
@@ -109,13 +109,13 @@ export default function AssumptionsPanel({ categoryKey, assumptions, onChange }:
 
       <div>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wide">
+          <span className="text-[11px] font-semibold text-tc-navy uppercase tracking-wide">
             Failure Timing (Hazard Shape)
           </span>
           {!isDefaultHazard && (
             <button
               onClick={() => setHazardReset()}
-              className="text-[11px] text-sky-400 hover:text-sky-300 underline underline-offset-2"
+              className="text-[11px] text-tc-teal hover:text-tc-teal-dark underline underline-offset-2"
             >
               Reset timing only
             </button>
@@ -159,7 +159,7 @@ export default function AssumptionsPanel({ categoryKey, assumptions, onChange }:
             max={1}
           />
         </div>
-        <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+        <p className="text-[10px] text-tc-muted mt-2 leading-relaxed">
           Burst strength = how many failures cluster in year 1. Fade rate = how quickly that burst dies
           out. Background = steady random failures each year. Wear-out = extra failures piling up near
           end of life. Accidental front-loading: 0 spreads drops/spills evenly, 1 puts almost all of
@@ -169,7 +169,7 @@ export default function AssumptionsPanel({ categoryKey, assumptions, onChange }:
 
       <button
         onClick={() => resetToDefaults(defaultCat)}
-        className="w-full text-xs py-2 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800/50 hover:border-slate-600 transition-colors"
+        className="w-full text-xs py-2 rounded-md border border-tc-border text-tc-navy hover:bg-tc-teal-light/60 hover:border-tc-teal/40 transition-colors"
       >
         Reset to Defaults
       </button>

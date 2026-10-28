@@ -1,26 +1,58 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-sora);
+  --font-numeric: var(--font-space-grotesk);
+
+  /* ThingyCare official palette */
+  --color-tc-navy: #182c49;
+  --color-tc-navy-dark: #0f1d33;
+  --color-tc-navy-light: #2a4568;
+  --color-tc-lime: #76c422;
+  --color-tc-lime-dark: #5da016;
+  --color-tc-teal: #36949b;
+  --color-tc-teal-dark: #2a757b;
+  --color-tc-teal-light: #e3f1f2;
+  --color-tc-orange: #e35125;
+  --color-tc-red: #db2457;
+  --color-tc-surface: #ffffff;
+  --color-tc-bg: #fcfcfc;
+  --color-tc-border: #e5e9f0;
+  --color-tc-muted: #5b6b82;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #fcfcfc;
+  --foreground: #182c49;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-sora), system-ui, sans-serif;
+  line-height: 1.2;
+}
+
+.font-numeric {
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+input[type="number"] {
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: #76c422;
+  color: #182c49;
 }

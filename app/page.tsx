@@ -1,545 +1,198 @@
 // app/page.tsx
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts';
+import { useState, useMemo } from 'react';
 import { evaluateWarranty, CATEGORIES } from './warrantyEngine';
-import AssumptionsPanel, { type Assumptions } from './AssumptionsPanel';
-import BreakEvenCard from './BreakEvenCard';
-
-const CATEGORY_DEFAULTS: Record<string, Assumptions> = Object.fromEntries(
-  Object.entries(CATEGORIES).map(([key, cat]) => [
-    key,
-    {
-      failureRate: cat.failureRate,
-      accidentalShare: Math.round(cat.accidentalShare * 100),
-      repairRatio: Math.round(cat.repairRatio * 100),
-      hazard: { infantStrength: 0.6, infantDecay: 1.2, background: 0.2, wearOutStrength: 0.5, accidentalFrontLoad: 0.5 },
-    },
-  ])
-);
+import InputFlow, { INITIAL_STATE, type FormState } from './InputFlow';
+import NumbersSection from './NumbersSection';
+import VerdictBanner, { computeVerdict } from './VerdictBanner';
+import LinkAnalyzer from './LinkAnalyzer';
+import type { ExtractedProduct } from './extractTypes';
+import type { Assumptions } from './AssumptionsPanel';
 
 export default function Home() {
-  const [productCategory, setProductCategory] = useState('smartphones');
-  const [productPrice, setProductPrice] = useState(1200);
-  const [ownershipYears, setOwnershipYears] = useState(5);
-  const [mfrYears, setMfrYears] = useState(1);
-  const [extendedWarrantyYears, setExtendedWarrantyYears] = useState(5);
-  const [jurisdiction, setJurisdiction] = useState<'australia' | 'other'>('australia');
-  const [includesAccidental, setIncludesAccidental] = useState(true);
-  const [frictionCost, setFrictionCost] = useState(50);
-  const [ccExtensionMonths, setCcExtensionMonths] = useState(12);
-  const [ccExcess, setCcExcess] = useState(50);
-  const [assumptionsOpen, setAssumptionsOpen] = useState(false);
-  const [assumptions, setAssumptions] = useState<Assumptions>(CATEGORY_DEFAULTS['smartphones']);
+  const [form, setForm] = useState<FormState>(INITIAL_STATE);
+  const [linkPanelOpen, setLinkPanelOpen] = useState(true);
+  const [expertOpen, setExpertOpen] = useState(false);
+  const [productName, setProductName] = useState<string | null>(null);
 
-  // When the category changes, reset assumptions to that category's defaults
-  const handleCategoryChange = (key: string) => {
-    setProductCategory(key);
-    setAssumptions(CATEGORY_DEFAULTS[key] ?? CATEGORY_DEFAULTS['smartphones']);
+  const evaluation = useMemo(
+    () =>
+      evaluateWarranty({
+        productPrice: Number(form.productPrice) || 0,
+        productCategory: form.productCategory,
+        mfrYears: Number(form.mfrYears) || 0,
+        extendedWarrantyYears: Number(form.extendedWarrantyYears) || 0,
+        ccExtensionMonths: Number(form.ccExtensionMonths) || 0,
+        ccExcess: Number(form.ccExcess) || 0,
+        ownershipYears: Number(form.ownershipYears) || 1,
+        jurisdiction: form.jurisdiction,
+        includesAccidental: form.includesAccidental,
+        frictionCost: Number(form.frictionCost) || 0,
+        failureRate: Number(form.assumptions.failureRate) || 0,
+        accidentalShare: (Number(form.assumptions.accidentalShare) || 0) / 100,
+        repairRatio: (Number(form.assumptions.repairRatio) || 0) / 100,
+        hazard: form.assumptions.hazard,
+      }),
+    [form]
+  );
+
+  const verdict = useMemo(
+    () =>
+      computeVerdict(
+        evaluation,
+        typeof form.quotedPremium === 'number' ? form.quotedPremium : 0,
+        form.quotedExcess
+      ),
+    [evaluation, form.quotedPremium, form.quotedExcess]
+  );
+
+  const applyProduct = (product: ExtractedProduct) => {
+    setForm((prev) => ({
+      ...prev,
+      productPrice: product.price ?? prev.productPrice,
+      productCategory: product.categoryKey ?? prev.productCategory,
+    }));
+    if (product.name) setProductName(product.name);
+    setLinkPanelOpen(false);
   };
 
-  const evaluation = useMemo(() => {
-    return evaluateWarranty({
-      productPrice: Number(productPrice) || 0,
-      productCategory,
-      mfrYears: Number(mfrYears) || 0,
-      extendedWarrantyYears: Number(extendedWarrantyYears) || 0,
-      ccExtensionMonths: Number(ccExtensionMonths) || 0,
-      ccExcess: Number(ccExcess) || 0,
-      ownershipYears: Number(ownershipYears) || 1,
-      jurisdiction,
-      includesAccidental,
-      frictionCost: Number(frictionCost) || 0,
-      failureRate: Number(assumptions.failureRate) || 0,
-      accidentalShare: (Number(assumptions.accidentalShare) || 0) / 100,
-      repairRatio: (Number(assumptions.repairRatio) || 0) / 100,
-      hazard: assumptions.hazard,
-    });
-  }, [
-    productPrice,
-    productCategory,
-    mfrYears,
-    extendedWarrantyYears,
-    ccExtensionMonths,
-    ccExcess,
-    ownershipYears,
-    jurisdiction,
-    includesAccidental,
-    frictionCost,
-    assumptions,
-  ]);
-
-  const isAustralia = jurisdiction === 'australia';
-
-  // Bar layout position calculations
-  const totalMonths = ownershipYears * 12;
-  const mfrMonths = mfrYears * 12;
-  const aclMonths = isAustralia ? evaluation.estimatedAclYears * 12 : 0;
-  const ewTotalMonths = extendedWarrantyYears * 12;
-
-  const mfrWidthPct = Math.min(100, (mfrMonths / totalMonths) * 100);
-  const ewStartPct = (mfrMonths / totalMonths) * 100;
-
-  // Extended Warranty Segment Widths
-  const overlapMonths = evaluation.ewTrack.overlapMonths;
-  const postAclMonths = evaluation.ewTrack.postAclMonths;
-  const totalEwActiveMonths = overlapMonths + postAclMonths;
-
-  const overlapWidthPct = totalEwActiveMonths > 0
-    ? (overlapMonths / totalMonths) * 100
-    : 0;
-
-  const postAclWidthPct = totalEwActiveMonths > 0
-    ? (postAclMonths / totalMonths) * 100
-    : 0;
-
   return (
-    <main className="min-h-screen bg-[#0a0d14] text-slate-100 p-4 md:p-8 font-sans">
-      <div className="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-        {/* LEFT COLUMN: INPUT PARAMETERS */}
-        <section className="lg:col-span-4 bg-[#111622] border border-slate-800/80 rounded-xl p-5 space-y-4">
-          <h2 className="text-base font-bold text-slate-100 tracking-wide">
-            Input Parameters
-          </h2>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Product Category
-            </label>
-            <select
-              value={productCategory}
-              onChange={(e) => handleCategoryChange(e.target.value)}
-              className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
-            >
-              {Object.entries(CATEGORIES).map(([key, cat]) => (
-                <option key={key} value={key}>{cat.name}</option>
-              ))}
-            </select>
+    <main className="min-h-screen bg-tc-bg text-tc-navy">
+      {/* Header */}
+      <header className="bg-tc-navy text-white">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-4 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-tc-lime flex items-center justify-center font-display font-bold text-tc-navy text-lg">
+            T
           </div>
-
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Product Purchase Price ($)
-            </label>
-            <input
-              type="number"
-              value={productPrice}
-              onChange={(e) => setProductPrice(Number(e.target.value))}
-              className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+            <div className="font-display font-bold text-lg leading-tight">ThingyCare</div>
+            <div className="text-xs text-white/60 leading-tight">Warranty Value Analyzer</div>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-10">
+        {/* Hero + link analyzer */}
+        <div className="mb-8">
+          <h1 className="font-display text-2xl md:text-4xl font-bold text-tc-navy mb-2 leading-tight">
+            Is that extended warranty <span className="text-tc-teal">actually worth it?</span>
+          </h1>
+          <p className="text-sm md:text-base text-tc-muted max-w-2xl leading-relaxed">
+            Answer a few questions — or paste a product link — and we&apos;ll tell you what the warranty
+            would be worth based on real failure rates, repair costs, and your legal rights.
+          </p>
+        </div>
+
+        {linkPanelOpen ? (
+          <div className="mb-8">
+            <LinkAnalyzer onApply={applyProduct} onDismiss={() => setLinkPanelOpen(false)} />
+          </div>
+        ) : (
+          <button
+            onClick={() => setLinkPanelOpen(true)}
+            className="mb-8 text-xs font-semibold text-tc-teal hover:text-tc-teal-dark underline underline-offset-2 transition-colors"
+          >
+            ← Analyse another product link
+          </button>
+        )}
+
+        {/* Verdict first, once there is a quote to judge */}
+        {verdict && (
+          <div className="mb-8">
+            <VerdictBanner info={verdict} />
+          </div>
+        )}
+
+        {productName && (
+          <div className="mb-6 inline-flex items-center gap-2 bg-tc-teal-light text-tc-teal-dark rounded-full px-4 py-1.5 text-sm font-semibold">
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+            {productName}
+          </div>
+        )}
+
+        {/* Guided inputs */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-7">
+            <InputFlow
+              state={form}
+              onChange={setForm}
+              onOpenExpert={() => {
+                setExpertOpen(true);
+                document.getElementById('numbers')?.scrollIntoView({ behavior: 'smooth' });
+              }}
             />
           </div>
 
-          {/* Dynamic Summary Box */}
-          <div className="bg-[#0a0d14] border border-slate-800/80 rounded-lg p-3.5 space-y-2 text-xs">
-            {isAustralia && (
-              <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
-                <span className="text-slate-400 font-medium">Est. ACL Validity Period:</span>
-                <strong className="text-sky-400 text-sm font-bold">
-                  {evaluation.estimatedAclYears} Years
-                </strong>
-              </div>
-            )}
-            <div className="flex justify-between items-center">
-              <span className="text-slate-400">Assumed Repair Cost:</span>
-              <strong className="text-slate-100 font-bold">${evaluation.repairCost}</strong>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-400">Assumed Failure Risk ({ownershipYears}-Yr):</span>
-              <strong className="text-slate-100 font-bold">{evaluation.totalFailureRatePct}%</strong>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-400">Accidental Share of Failures:</span>
-              <strong className="text-amber-400 font-bold">{evaluation.accidentalSharePct}%</strong>
-            </div>
-            <div className="flex justify-between items-center pt-2 border-t border-slate-800/60">
-              <span className="text-slate-400">EW Net Risk Value (Post-ACL + Accidental):</span>
-              <strong className="text-emerald-400 font-bold">{evaluation.ewTrack.netRiskPercentage}%</strong>
-            </div>
-            <div className="flex justify-between items-center pt-2 border-t border-slate-800/60">
-              <span className="text-slate-400">Break-Even Premium ($0 excess):</span>
-              <strong className="text-emerald-400 font-bold">
-                ${evaluation.breakEven.atZeroExcess.toFixed(2)}
-              </strong>
-            </div>
-          </div>
-
-          {/* Advanced Assumptions Panel */}
-          <div className="bg-[#0a0d14] border border-slate-800/80 rounded-lg overflow-hidden">
-            <button
-              onClick={() => setAssumptionsOpen(!assumptionsOpen)}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800/30 transition-colors"
-            >
-              <span>Advanced Assumptions</span>
-              <span
-                className={`text-slate-500 transition-transform duration-200 ${
-                  assumptionsOpen ? 'rotate-180' : ''
-                }`}
-              >
-                ▼
-              </span>
-            </button>
-            {assumptionsOpen && (
-              <div className="px-3.5 pb-3.5 pt-1 border-t border-slate-800/60">
-                <AssumptionsPanel
-                  categoryKey={productCategory}
-                  assumptions={assumptions}
-                  onChange={setAssumptions}
-                />
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Jurisdiction</label>
-            <select
-              value={jurisdiction}
-              onChange={(e) => setJurisdiction(e.target.value as 'australia' | 'other')}
-              className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-3 py-1.5 text-xs text-slate-200"
-            >
-              <option value="australia">Australia (ACL Statutory Guarantees)</option>
-              <option value="other">Standard Statutory Protection</option>
-            </select>
-          </div>
-
-          <label className="flex items-center space-x-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={includesAccidental}
-              onChange={(e) => setIncludesAccidental(e.target.checked)}
-              className="rounded bg-[#0a0d14] border-slate-700 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
-            />
-            <span className="text-xs text-slate-300">
-              Extended Warranty Includes Accidental Damage
-            </span>
-          </label>
-
-          {isAustralia && (
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Value placed on avoids ACL hassle/delays ($)
-              </label>
-              <input
-                type="number"
-                value={frictionCost}
-                onChange={(e) => setFrictionCost(Number(e.target.value))}
-                className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-3 py-1.5 text-xs text-slate-200"
-              />
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <div>
-              <label className="block text-[11px] text-slate-400 mb-1">Mfr Warranty (Yrs)</label>
-              <input
-                type="number"
-                value={mfrYears}
-                onChange={(e) => setMfrYears(Number(e.target.value))}
-                className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-2.5 py-1 text-xs text-slate-200"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] text-slate-400 mb-1">Ext Warranty (Yrs)</label>
-              <input
-                type="number"
-                value={extendedWarrantyYears}
-                onChange={(e) => setExtendedWarrantyYears(Number(e.target.value))}
-                className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-2.5 py-1 text-xs text-slate-200"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] text-slate-400 mb-1">CC Ext (Mo)</label>
-              <input
-                type="number"
-                value={ccExtensionMonths}
-                onChange={(e) => setCcExtensionMonths(Number(e.target.value))}
-                className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-2.5 py-1 text-xs text-slate-200"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] text-slate-400 mb-1">CC Excess ($)</label>
-              <input
-                type="number"
-                value={ccExcess}
-                onChange={(e) => setCcExcess(Number(e.target.value))}
-                className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-2.5 py-1 text-xs text-slate-200"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] text-slate-400 mb-1">Ownership (Yrs)</label>
-            <input
-              type="number"
-              min="1"
-              max="10"
-              value={ownershipYears}
-              onChange={(e) => setOwnershipYears(Number(e.target.value))}
-              className="w-full bg-[#0a0d14] border border-slate-700/80 rounded-md px-2.5 py-1 text-xs text-slate-200"
-            />
-          </div>
-        </section>
-
-        {/* RIGHT COLUMN */}
-        <section className="lg:col-span-8 space-y-6">
-
-          {/* CARD 1: HAZARD PROFILE & CONTINUOUS COVERAGE TRACKS */}
-          <div className="bg-[#111622] border border-slate-800/80 rounded-xl p-5 space-y-4">
-
-            <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
-              <h3 className="text-sm font-semibold text-slate-200">
-                Bathtub Hazard Profile & Continuous Coverage Tracks
-              </h3>
-              <span className="text-xs text-slate-400">
-                {ownershipYears}-Yr Risk: <strong className="text-amber-400">{evaluation.totalFailureRatePct}%</strong> ({evaluation.accidentalSharePct}% Accidental)
-              </span>
-            </div>
-
-            {/* Layout Grid Aligned to Chart Axis */}
-            <div className="space-y-3">
-
-              {/* Chart Row */}
-              <div className="grid grid-cols-12 items-end">
-                <div className="col-span-3 text-right pr-3 pb-4">
-                  <span className="text-[10px] text-slate-500 font-mono block">Hazard</span>
-                  <span className="text-[10px] text-slate-500 font-mono block">Rate %</span>
+          {/* Live summary rail */}
+          <aside className="lg:col-span-5 lg:sticky lg:top-6 space-y-4">
+            <div className="bg-tc-navy text-white rounded-2xl p-5 md:p-6 shadow-sm">
+              <h3 className="font-display text-base font-bold mb-4">What the maths says</h3>
+              <dl className="space-y-3 text-sm">
+                <div className="flex justify-between items-baseline gap-3">
+                  <dt className="text-white/70">Typical repair cost</dt>
+                  <dd className="font-numeric font-bold text-lg">${evaluation.repairCost}</dd>
                 </div>
-
-                <div className="col-span-9 h-48 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={evaluation.annualTimeline}
-                      margin={{ top: 10, right: 0, left: 0, bottom: 0 }}
-                    >
-                      <defs>
-                        <linearGradient id="accidentalGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.8} />
-                          <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.3} />
-                        </linearGradient>
-                        <linearGradient id="defectGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#818cf8" stopOpacity={0.7} />
-                          <stop offset="95%" stopColor="#4338ca" stopOpacity={0.3} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                      <XAxis
-                        dataKey="label"
-                        stroke="#64748b"
-                        fontSize={11}
-                        tickLine={false}
-                        padding={{ left: 0, right: 0 }}
-                      />
-                      <YAxis hide domain={[0, 'auto']} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#0f172a',
-                          borderColor: '#334155',
-                          borderRadius: '0.375rem',
-                          fontSize: '0.75rem',
-                        }}
-                        formatter={(val: any) => [`${val}%`, '']}
-                      />
-                      <Legend verticalAlign="top" height={28} iconType="circle" />
-
-                      <Area
-                        type="monotone"
-                        dataKey="accidentalRatePct"
-                        name="Accidental Hazard"
-                        stackId="1"
-                        stroke="#f43f5e"
-                        fill="url(#accidentalGrad)"
-                        strokeWidth={1.5}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="defectRatePct"
-                        name="Warranty Defect Hazard"
-                        stackId="1"
-                        stroke="#818cf8"
-                        fill="url(#defectGrad)"
-                        strokeWidth={2}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                <div className="flex justify-between items-baseline gap-3">
+                  <dt className="text-white/70">Chance it breaks in {form.ownershipYears} yrs</dt>
+                  <dd className="font-numeric font-bold text-lg">{evaluation.totalFailureRatePct}%</dd>
                 </div>
-              </div>
-
-              {/* Coverage Track Bars */}
-              <div className="space-y-2 text-xs pt-1">
-
-                {/* Track 1: Manufacturer */}
-                <div className="grid grid-cols-12 items-center">
-                  <span className="col-span-3 text-slate-400 font-medium pr-3 text-right">
-                    Manufacturer
-                  </span>
-                  <div className="col-span-9 bg-[#0a0d14] h-6 rounded border border-slate-800 relative overflow-hidden flex items-center">
-                    <div
-                      className="absolute top-0 bottom-0 left-0 bg-slate-200 text-slate-950 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
-                      style={{ width: `${mfrWidthPct}%` }}
-                    >
-                      {evaluation.mfrTrack.riskPercentage}% risk
-                    </div>
-                  </div>
-                </div>
-
-                {/* Track 2: Statutory (ACL) */}
-                {isAustralia && (
-                  <div className="grid grid-cols-12 items-center">
-                    <span className="col-span-3 text-slate-400 font-medium pr-3 text-right">
-                      Statutory (ACL)
-                    </span>
-                    <div className="col-span-9 bg-[#0a0d14] h-6 rounded border border-slate-800 relative overflow-hidden flex items-center">
-                      <div
-                        className="absolute top-0 bottom-0 left-0 bg-sky-500 text-slate-950 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
-                        style={{ width: `${mfrWidthPct}%` }}
-                      >
-                        {evaluation.mfrTrack.riskPercentage}% risk
-                      </div>
-                      {evaluation.estimatedAclYears > mfrYears && (
-                        <div
-                          className="absolute top-0 bottom-0 bg-slate-300 text-slate-900 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
-                          style={{
-                            left: `${mfrWidthPct}%`,
-                            width: `${Math.min(
-                              100 - mfrWidthPct,
-                              ((evaluation.estimatedAclYears - mfrYears) / ownershipYears) * 100
-                            )}%`,
-                          }}
-                        >
-                          {(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1)}% risk
-                        </div>
-                      )}
-                    </div>
+                {form.jurisdiction === 'australia' && (
+                  <div className="flex justify-between items-baseline gap-3">
+                    <dt className="text-white/70">Free legal cover lasts</dt>
+                    <dd className="font-numeric font-bold text-lg">
+                      {evaluation.estimatedAclYears} {evaluation.estimatedAclYears === 1 ? 'yr' : 'yrs'}
+                    </dd>
                   </div>
                 )}
-
-                {/* Track 3: Extended Warranty (Split into Green Overlap & White Post-ACL Sections) */}
-                <div className="grid grid-cols-12 items-center">
-                  <span className="col-span-3 text-slate-400 font-medium pr-3 text-right">
-                    Extended Warranty
-                  </span>
-                  <div className="col-span-9 bg-[#0a0d14] h-6 rounded border border-slate-800 relative overflow-hidden flex items-center">
-                    
-                    {/* Section 1: Overlap with ACL (Green - Non-preferred for defects) */}
-                    {evaluation.ewTrack.hasOverlap && (
-                      <div
-                        className="absolute top-0 bottom-0 bg-emerald-500 text-slate-950 font-bold text-[11px] flex items-center justify-center transition-all duration-300 border-r border-emerald-600/40"
-                        style={{
-                          left: `${ewStartPct}%`,
-                          width: `${overlapWidthPct}%`,
-                        }}
-                      >
-                        {evaluation.ewTrack.overlapRiskPercentage}% risk
-                      </div>
-                    )}
-
-                    {/* Section 2: Post-ACL Period (White - Preferred option) */}
-                    {evaluation.ewTrack.hasPostAcl && (
-                      <div
-                        className="absolute top-0 bottom-0 bg-slate-200 text-slate-950 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
-                        style={{
-                          left: `${ewStartPct + overlapWidthPct}%`,
-                          width: `${postAclWidthPct}%`,
-                        }}
-                      >
-                        {evaluation.ewTrack.postAclRiskPercentage}% risk
-                      </div>
-                    )}
-                  </div>
+                <div className="flex justify-between items-baseline gap-3 pt-3 border-t border-white/15">
+                  <dt className="text-white/70">Risk only the paid warranty covers</dt>
+                  <dd className="font-numeric font-bold text-lg text-tc-lime">
+                    {evaluation.ewTrack.netRiskPercentage}%
+                  </dd>
                 </div>
-
-                {/* Track 4: Credit Card */}
-                <div className="grid grid-cols-12 items-center">
-                  <span className="col-span-3 text-slate-400 font-medium pr-3 text-right">
-                    Credit Card
-                  </span>
-                  <div className="col-span-9 bg-[#0a0d14] h-6 rounded border border-slate-800 relative overflow-hidden flex items-center">
-                    <div
-                      className="absolute top-0 bottom-0 bg-purple-500 text-slate-100 font-bold text-[11px] flex items-center justify-center transition-all duration-300"
-                      style={{
-                        left: `${mfrWidthPct}%`,
-                        width: `${Math.min(
-                          100 - mfrWidthPct,
-                          ((ccExtensionMonths / 12) / ownershipYears) * 100
-                        )}%`,
-                      }}
-                    >
-                      {evaluation.ccTrack.riskPercentage}% risk
-                    </div>
-                  </div>
+                <div className="flex justify-between items-baseline gap-3">
+                  <dt className="text-white/70">Fair price ($0 excess)</dt>
+                  <dd className="font-numeric font-bold text-lg text-tc-lime">
+                    ${evaluation.breakEven.atZeroExcess.toFixed(2)}
+                  </dd>
                 </div>
-
-              </div>
-
+              </dl>
             </div>
 
-          </div>
-
-          {/* CARD 2: BREAK-EVEN PREMIUM */}
-          <BreakEvenCard evaluation={evaluation} />
-
-          {/* CARD 3: EXTENDED WARRANTY NET VALUE MATRIX */}
-          <div className="bg-[#111622] border border-slate-800/80 rounded-xl p-5">
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-200 mb-1">
-                  Extended Warranty Net Value Matrix
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Calculated using net EW risk value: <strong className="text-slate-200">{evaluation.ewTrack.netRiskPercentage}%</strong> (Manufacturing defects after ACL expires + full accidental damage lifetime).
-                </p>
-              </div>
+            <div className="bg-tc-teal-light rounded-2xl p-5 text-sm text-tc-navy leading-relaxed">
+              <strong className="font-display block mb-1">Why this matters</strong>
+              In Australia, consumer guarantees already force retailers to fix major faults for a
+              reasonable lifespan — a right you have whether or not you buy the warranty. The warranty&apos;s
+              real value is only the risk that isn&apos;t already covered.
             </div>
+          </aside>
+        </div>
 
-            <div className="overflow-x-auto mt-4">
-              <table className="w-full text-center text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800/80 text-slate-400">
-                    <th className="py-2 px-3 text-left font-medium">Premium \ Excess</th>
-                    {evaluation.matrix.excesses.map((exc) => (
-                      <th key={exc} className="py-2 px-2 font-medium">${exc}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/40">
-                  {evaluation.matrix.grid.map((row, idx) => (
-                    <tr key={idx}>
-                      <td className="py-2 px-3 text-left font-medium text-slate-300">
-                        ${evaluation.matrix.premiums[idx]}
-                      </td>
-                      {row.map((cell, cIdx) => (
-                        <td key={cIdx} className="p-1">
-                          <div
-                            className={`py-1.5 px-2 rounded font-bold transition-colors ${
-                              cell.status === 'positive'
-                                ? 'bg-emerald-500 text-slate-950'
-                                : cell.status === 'neutral'
-                                ? 'bg-orange-500 text-slate-950'
-                                : 'bg-red-600 text-slate-100'
-                            }`}
-                          >
-                            {cell.netValue >= 0 ? `+${cell.netValue}` : `-${Math.abs(cell.netValue)}`}
-                          </div>
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        {/* Detailed numbers */}
+        <div id="numbers" className="mt-10">
+          <h2 className="font-display text-xl md:text-2xl font-bold text-tc-navy mb-4">
+            See the numbers
+          </h2>
+          <NumbersSection
+            evaluation={evaluation}
+            ownershipYears={form.ownershipYears}
+            mfrYears={form.mfrYears}
+            ccExtensionMonths={form.ccExtensionMonths}
+            assumptions={form.assumptions}
+            onAssumptionsChange={(a: Assumptions) => setForm((p) => ({ ...p, assumptions: a }))}
+            categoryKey={form.productCategory}
+            expertOpen={expertOpen}
+            onToggleExpert={() => setExpertOpen((o) => !o)}
+          />
+        </div>
 
-        </section>
+        <footer className="mt-12 pt-6 border-t border-tc-border text-xs text-tc-muted leading-relaxed">
+          Estimates only — based on general failure-rate research, not on this specific model. Nothing
+          you enter is saved or sent anywhere except the retailer page you ask us to read.
+        </footer>
       </div>
     </main>
   );
