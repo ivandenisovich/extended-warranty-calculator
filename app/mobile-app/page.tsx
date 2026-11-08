@@ -23,6 +23,7 @@ const DEMO = {
   location: 'Boston, MA',
   mfrYears: 1,
   extraYears: 2,
+  state: 'MA',
 };
 
 export default async function MobileAppPage() {
@@ -30,10 +31,11 @@ export default async function MobileAppPage() {
     getEwPricingConfig(),
     getCategoryRule(DEMO.category),
     getCalculatorDefaults(),
-    getUsTierRule('MA'),
+    getUsTierRule(DEMO.state),
   ]);
 
   const extendedYears = DEMO.mfrYears + DEMO.extraYears;
+  const accidentalExcess = ewExcess(pricing, DEMO.price);
 
   const evalPlan = (includesAccidental: boolean, quotedExcess: number) =>
     evaluateWarranty({
@@ -54,13 +56,14 @@ export default async function MobileAppPage() {
     } satisfies EvaluationInput);
 
   const defectOnlyEval = evalPlan(false, 0);
-  const withAccidentalEval = evalPlan(true, ewExcess(pricing, DEMO.price));
+  const withAccidentalEval = evalPlan(true, accidentalExcess);
+  const repairCost = withAccidentalEval.repairCost;
 
   const plans: PlanInfo[] = [
     {
       key: 'defect-only',
       title: 'Defects only',
-      tagline: 'Fixes it when it breaks on its own',
+      tagline: 'Covers the product when it breaks on its own',
       marketPrice: Math.round(ewPrice(pricing, DEMO.price, DEMO.category, DEMO.extraYears, false)),
       fairPrice: Math.round(defectOnlyEval.breakEven.atQuotedExcess),
       accent: 'navy',
@@ -71,7 +74,7 @@ export default async function MobileAppPage() {
       tagline: 'Also covers drops, spills and cracks',
       marketPrice: Math.round(ewPrice(pricing, DEMO.price, DEMO.category, DEMO.extraYears, true)),
       fairPrice: Math.round(withAccidentalEval.breakEven.atQuotedExcess),
-      excess: ewExcess(pricing, DEMO.price),
+      excess: accidentalExcess,
       accent: 'teal',
     },
   ];
@@ -80,6 +83,8 @@ export default async function MobileAppPage() {
   const headline = plans[1];
   const headlineRatio = headline.marketPrice / Math.max(headline.fairPrice, 0.01);
   const verdict = headlineRatio <= 1 ? 'worth-it' : headlineRatio <= 1.25 ? 'borderline' : 'skip-it';
+
+  const excessExceedsRepair = accidentalExcess >= repairCost;
 
   return (
     <main className="min-h-screen bg-tc-bg text-tc-navy">
@@ -98,35 +103,25 @@ export default async function MobileAppPage() {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
-        <div className="mb-8 text-center">
+      <div className="max-w-6xl mx-auto px-4 md:px-6 py-10 md:py-16">
+        <div className="mb-10 text-center">
           <h1 className="font-display text-2xl md:text-4xl font-bold leading-tight mb-3">
             The ThingyCare mobile app
           </h1>
           <p className="text-sm md:text-base text-tc-muted max-w-xl mx-auto leading-relaxed">
-            Know if a warranty is worth it — right at the register. This is a preview of the
-            ThingyCare app showing a registered product and whether its protection plans make sense.
+            Know if a warranty is worth it, right at the register. This preview shows a registered
+            product and whether its protection plans make sense.
           </p>
         </div>
 
         <PhoneFrame>
-          {/* status bar */}
-          <div className="flex items-center justify-between px-6 pt-3 pb-1 text-xs font-semibold text-tc-navy">
-            <span>9:41</span>
-            <div className="w-20 h-6 bg-tc-navy rounded-full" />
-            <span className="flex gap-0.5 items-center">
-              <span className="w-1.5 h-3 bg-tc-lime rounded-sm" />
-              <span className="w-1.5 h-3 bg-tc-lime rounded-sm" />
-              <span className="w-1.5 h-3 bg-tc-lime rounded-sm" />
-              <span className="w-1.5 h-3 bg-tc-border rounded-sm" />
-            </span>
-          </div>
-          {/* app header */}
-          <div className="flex items-center gap-2 px-5 py-3 border-b border-tc-border">
-            <span className="text-tc-teal font-display text-xl leading-none">‹</span>
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-tc-border bg-tc-bg">
+            <svg width="10" height="16" viewBox="0 0 10 16" fill="none" aria-hidden>
+              <path d="M8 2 2 8l6 6" stroke="#36949b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
             <h2 className="font-display font-bold text-lg">My Thingy</h2>
           </div>
-          {/* hero photo with badges */}
+
           <div className="px-5 pt-4">
             <div className="relative rounded-2xl overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -143,7 +138,7 @@ export default async function MobileAppPage() {
               </span>
             </div>
           </div>
-          {/* product details card */}
+
           <div className="mx-5 mt-4 bg-white rounded-2xl p-4 shadow-sm border border-tc-border">
             <div className="flex items-start justify-between mb-3">
               <h3 className="font-display font-bold text-lg leading-tight pr-2">{DEMO.name}</h3>
@@ -169,8 +164,7 @@ export default async function MobileAppPage() {
             </div>
           </div>
 
-          {/* verdict section (replaces the stars) */}
-          <div className="mx-5 mt-4 mb-6">
+          <div className="mx-5 mt-4">
             <VerdictGauge
               marketPrice={headline.marketPrice}
               fairPrice={headline.fairPrice}
@@ -182,13 +176,14 @@ export default async function MobileAppPage() {
               ))}
             </div>
             <p className="text-[11px] text-tc-muted leading-relaxed mt-3 text-center">
-              Accidental cover costs about 75% more — worth it for drop-prone items like phones and
-              headphones. Estimates only, based on how products typically fail.
+              {excessExceedsRepair
+                ? `A typical repair for this item costs about $${repairCost}, which is less than the $${accidentalExcess} excess. So accident cover pays out little or nothing here.`
+                : 'Accidental cover costs more because it also pays for drops and spills. Compare the two options above.'}
             </p>
           </div>
         </PhoneFrame>
 
-        <div className="text-center pt-8 pb-4">
+        <div className="text-center pt-10">
           <Link
             href="/"
             className="inline-block bg-tc-teal hover:bg-tc-teal-dark text-white font-display font-bold text-sm rounded-full px-6 py-3 transition-colors"

@@ -1,3 +1,5 @@
+'use client';
+
 import type { Verdict } from './VerdictBanner';
 
 export interface PlanInfo {
@@ -40,7 +42,9 @@ export default function PlanCard({ plan }: { plan: PlanInfo }) {
         ? { icon: '~', text: 'Borderline', cls: 'bg-tc-orange text-white' }
         : { icon: '✕', text: 'Overpriced', cls: 'bg-tc-red text-white' };
   const overBy = plan.marketPrice - plan.fairPrice;
-  const ratio = plan.marketPrice / Math.max(plan.fairPrice, 0.01);
+  const scaleMax = Math.max(plan.marketPrice, plan.fairPrice, 1) * 1.15;
+  const fairPct = Math.min(95, Math.max(3, (plan.fairPrice / scaleMax) * 100));
+  const marketPct = Math.min(95, Math.max(3, (plan.marketPrice / scaleMax) * 100));
 
   return (
     <div className={`rounded-2xl border p-3.5 bg-white shadow-sm ${accent.border}`}>
@@ -53,38 +57,29 @@ export default function PlanCard({ plan }: { plan: PlanInfo }) {
         </span>
       </div>
       <p className="text-xs text-tc-muted mb-3">{plan.tagline}</p>
-      {/* mini comparison bar: fair price marker vs market price marker */}
-      <div className="relative h-8 mb-1">
+      <div className="relative h-9 mb-1">
         <div className={`absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1.5 rounded-full ${accent.bar} opacity-30`} />
-        {(() => {
-          const scaleMax = Math.max(plan.marketPrice, plan.fairPrice, 1) * 1.15;
-          const fairPct = Math.min(95, Math.max(3, (plan.fairPrice / scaleMax) * 100));
-          const marketPct = Math.min(95, Math.max(3, (plan.marketPrice / scaleMax) * 100));
-          return (
-            <>
-              <div className="absolute -translate-x-1/2" style={{ left: `${fairPct}%` }}>
-                <div className={`w-3 h-3 rounded-full border-2 ${accent.bar} border-tc-lime mx-auto`} />
-                <div className="text-[9px] font-numeric font-semibold text-center mt-0.5 whitespace-nowrap">
-                  ${plan.fairPrice}
-                </div>
-              </div>
-              <div className="absolute -translate-x-1/2" style={{ left: `${marketPct}%`, top: '2px' }}>
-                <div className="w-3 h-3 rounded-sm rotate-45 border-2 border-white bg-transparent mx-auto" />
-                <div className="text-[9px] font-numeric font-semibold text-center mt-0.5 whitespace-nowrap">
-                  ${plan.marketPrice}
-                </div>
-              </div>
-            </>
-          );
-        })()}
+        <div className="absolute -translate-x-1/2" style={{ left: `${fairPct}%` }}>
+          <div className="w-3 h-3 rounded-full bg-tc-lime border-2 border-white mx-auto" />
+          <div className="text-[10px] font-numeric font-semibold text-center mt-0.5 whitespace-nowrap">
+            Fair ${plan.fairPrice}
+          </div>
+        </div>
+        <div className="absolute -translate-x-1/2" style={{ left: `${marketPct}%`, top: '0px' }}>
+          <div className="w-3 h-3 rounded-sm rotate-45 bg-tc-navy mx-auto" />
+          <div className="text-[10px] font-numeric font-semibold text-center mt-0.5 whitespace-nowrap">
+            Offer ${plan.marketPrice}
+          </div>
+        </div>
       </div>
-      <div className="flex items-center justify-between text-[11px] font-numeric mt-1">
+      <div className="flex items-center justify-between text-[11px] mt-2">
         <span className="text-tc-muted">
-          {overBy > 0 ? `You'd overpay by about $${Math.round(overBy)}` : 'At or below fair value'}
+          {overBy > 0 ? `About $${Math.round(overBy)} more than it is worth` : 'At or below what it is worth'}
         </span>
-        {plan.excess !== undefined && <span className="text-tc-muted">${plan.excess} excess per claim</span>}
+        {plan.excess !== undefined && (
+          <span className="font-numeric text-tc-muted">${plan.excess} excess</span>
+        )}
       </div>
-      <p className="text-[10px] text-tc-muted mt-1">{Math.round(ratio * 100)}% of fair value</p>
     </div>
   );
 }
