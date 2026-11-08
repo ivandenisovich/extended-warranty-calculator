@@ -1,6 +1,7 @@
 import { getCategories } from './categories';
 import { getCalculatorDefaults, getEwPricingConfig } from './jurisdictionRules.server';
 import Analyzer from './Analyzer';
+import SiteNav from './SiteNav';
 import Link from 'next/link';
 
 export default async function Home() {
@@ -20,10 +21,11 @@ export default async function Home() {
             alt="ThingyCare logo"
             className="w-9 h-9 object-contain"
           />
-          <div>
+          <div className="flex-1">
             <div className="font-display font-bold text-lg leading-tight">ThingyCare</div>
             <div className="text-xs text-white/60 leading-tight">Warranty Value Analyzer</div>
           </div>
+          <SiteNav active="calculator" />
         </div>
       </header>
 

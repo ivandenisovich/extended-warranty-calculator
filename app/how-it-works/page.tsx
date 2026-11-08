@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import SiteNav from '../SiteNav';
 
 export const metadata: Metadata = {
   title: 'How It Works | ThingyCare',
@@ -52,7 +53,7 @@ export default function HowItWorks() {
     <main className="min-h-screen bg-tc-bg text-tc-navy">
       <header className="bg-tc-navy text-white">
         <div className="max-w-3xl mx-auto px-4 md:px-6 py-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex-1 flex items-center gap-3">
             <img
               src="/4107097-ThingyCare_Icon.svg"
               alt="ThingyCare logo"
@@ -63,12 +64,7 @@ export default function HowItWorks() {
               <div className="text-xs text-white/60 leading-tight">Warranty Value Analyzer</div>
             </div>
           </div>
-          <Link
-            href="/"
-            className="text-xs font-semibold text-white/80 hover:text-white underline underline-offset-2 transition-colors"
-          >
-            ← Back to the calculator
-          </Link>
+          <SiteNav />
         </div>
       </header>
 
