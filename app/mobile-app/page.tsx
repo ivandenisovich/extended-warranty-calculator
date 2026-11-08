@@ -5,7 +5,7 @@ import { getCategoryRule, getEwPricingConfig, getCalculatorDefaults, getUsTierRu
 import { evaluateWarranty, type EvaluationInput } from '../warrantyEngine';
 import { ewPrice, ewExcess } from '../../lib/ewPricingModel';
 import PhoneFrame from '../PhoneFrame';
-import VerdictGauge from '../VerdictGauge';
+import PlanMatrix, { type MatrixCell } from '../PlanMatrix';
 import PlanCard, { type PlanInfo } from '../PlanCard';
 
 export const metadata: Metadata = {
@@ -34,55 +34,60 @@ export default async function MobileAppPage() {
     getUsTierRule(DEMO.state),
   ]);
 
-  const extendedYears = DEMO.mfrYears + DEMO.extraYears;
   const accidentalExcess = ewExcess(pricing, DEMO.price);
+  const PLAN_YEARS = [3, 4, 5];
 
-  const evalPlan = (includesAccidental: boolean, quotedExcess: number) =>
+  const evalPlan = (years: number, includesAccidental: boolean) =>
     evaluateWarranty({
       productPrice: DEMO.price,
       productCategory: DEMO.category,
       mfrYears: DEMO.mfrYears,
-      extendedWarrantyYears: extendedYears,
-      ownershipYears: defaults.ownershipYears,
+      extendedWarrantyYears: years,
+      ownershipYears: years,
       jurisdiction: 'united-states',
       ccExtensionMonths: defaults.ccExtensionMonths,
       ccExcess: defaults.ccExcess,
       frictionCost: defaults.frictionCost,
       purchaseProtectionDays: defaults.purchaseProtectionDays,
       includesAccidental,
-      quotedExcess,
+      quotedExcess: includesAccidental ? accidentalExcess : 0,
       categoryRule: category,
       usTier,
     } satisfies EvaluationInput);
 
-  const defectOnlyEval = evalPlan(false, 0);
-  const withAccidentalEval = evalPlan(true, accidentalExcess);
-  const repairCost = withAccidentalEval.repairCost;
+  const cellFor = (years: number, includesAccidental: boolean): MatrixCell => ({
+    marketPrice: Math.round(
+      ewPrice(pricing, DEMO.price, DEMO.category, years - DEMO.mfrYears, includesAccidental)
+    ),
+    fairPrice: Math.round(evalPlan(years, includesAccidental).breakEven.atQuotedExcess),
+  });
+
+  const matrixRows = [
+    { title: 'Defects only', cells: PLAN_YEARS.map((y) => cellFor(y, false)) },
+    { title: 'Defects + accidental', cells: PLAN_YEARS.map((y) => cellFor(y, true)) },
+  ];
+
+  const repairCost = evalPlan(DEMO.mfrYears + DEMO.extraYears, true).repairCost;
 
   const plans: PlanInfo[] = [
     {
       key: 'defect-only',
       title: 'Defects only',
       tagline: 'Covers the product when it breaks on its own',
-      marketPrice: Math.round(ewPrice(pricing, DEMO.price, DEMO.category, DEMO.extraYears, false)),
-      fairPrice: Math.round(defectOnlyEval.breakEven.atQuotedExcess),
+      marketPrice: matrixRows[0].cells[0].marketPrice,
+      fairPrice: matrixRows[0].cells[0].fairPrice,
       accent: 'navy',
     },
     {
       key: 'with-accidental',
       title: 'Defects + accidental',
       tagline: 'Also covers drops, spills and cracks',
-      marketPrice: Math.round(ewPrice(pricing, DEMO.price, DEMO.category, DEMO.extraYears, true)),
-      fairPrice: Math.round(withAccidentalEval.breakEven.atQuotedExcess),
+      marketPrice: matrixRows[1].cells[0].marketPrice,
+      fairPrice: matrixRows[1].cells[0].fairPrice,
       excess: accidentalExcess,
       accent: 'teal',
     },
   ];
-
-  // Headline verdict uses the accidental-inclusive plan (the typical offer).
-  const headline = plans[1];
-  const headlineRatio = headline.marketPrice / Math.max(headline.fairPrice, 0.01);
-  const verdict = headlineRatio <= 1 ? 'worth-it' : headlineRatio <= 1.25 ? 'borderline' : 'skip-it';
 
   const excessExceedsRepair = accidentalExcess >= repairCost;
 
@@ -165,11 +170,7 @@ export default async function MobileAppPage() {
           </div>
 
           <div className="mx-5 mt-4">
-            <VerdictGauge
-              marketPrice={headline.marketPrice}
-              fairPrice={headline.fairPrice}
-              verdict={verdict}
-            />
+            <PlanMatrix years={PLAN_YEARS} rows={matrixRows} />
             <div className="grid grid-cols-1 gap-3 mt-3">
               {plans.map((p) => (
                 <PlanCard key={p.key} plan={p} />
