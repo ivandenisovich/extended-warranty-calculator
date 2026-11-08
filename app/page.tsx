@@ -1,10 +1,14 @@
 import { getCategories } from './categories';
-import { getCalculatorDefaults } from './jurisdictionRules.server';
+import { getCalculatorDefaults, getEwPricingConfig } from './jurisdictionRules.server';
 import Analyzer from './Analyzer';
 import Link from 'next/link';
 
 export default async function Home() {
-  const [categories, defaults] = await Promise.all([getCategories(), getCalculatorDefaults()]);
+  const [categories, defaults, pricing] = await Promise.all([
+    getCategories(),
+    getCalculatorDefaults(),
+    getEwPricingConfig(),
+  ]);
 
   return (
     <main className="min-h-screen bg-tc-bg text-tc-navy">
@@ -40,7 +44,7 @@ export default async function Home() {
           </p>
         </div>
 
-        <Analyzer categories={categories} defaults={defaults} />
+        <Analyzer categories={categories} defaults={defaults} pricing={pricing} />
 
         <footer className="mt-12 pt-6 border-t border-tc-border text-xs text-tc-muted leading-relaxed">
           Estimates only — based on general failure-rate research, not on this specific model. Nothing

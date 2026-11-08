@@ -7,6 +7,8 @@ import type { CalculatorDefaults, Jurisdiction } from '../lib/publicTypes';
 import { JURISDICTION_RULES, fallbackRule } from '../lib/jurisdictionRules';
 import { US_STATES, usTierOf } from '../lib/usTierRules';
 import { CALCULATOR_DEFAULTS } from '../lib/calculatorDefaults';
+import type { EwPricingConfig } from '../lib/ewPricingModel';
+import { suggestedOffer } from '../lib/ewPricingModel';
 import { DEFAULT_HAZARD } from './warrantyTypes.client';
 
 export interface FormState {
@@ -25,31 +27,39 @@ export interface FormState {
   ccExcess: number;
   quotedPremium: number | '';
   quotedExcess: number;
+  // True once the user types their own premium; stops product-link
+  // suggestions from overwriting it
+  userEditedPremium: boolean;
   assumptions: Assumptions;
 }
 
 export function makeInitialState(
   categories: CategoryInfo[],
-  overrides?: Partial<CalculatorDefaults>
+  overrides?: Partial<CalculatorDefaults>,
+  pricing?: EwPricingConfig
 ): FormState {
   const first = categories[0];
   const d = { ...CALCULATOR_DEFAULTS, ...overrides };
+  const offer = pricing
+    ? suggestedOffer(pricing, d.productPrice, first?.key ?? 'smartphones', d.mfrYears)
+    : null;
   return {
     productCategory: first?.key ?? 'smartphones',
     productPrice: d.productPrice,
     ownershipYears: d.ownershipYears,
     mfrYears: d.mfrYears,
-    extendedWarrantyYears: d.extendedWarrantyYears,
+    extendedWarrantyYears: offer?.extendedWarrantyYears ?? d.extendedWarrantyYears,
     jurisdiction: 'australia',
     usState: '',
     purchaseProtectionDays: d.purchaseProtectionDays,
-    includesAccidental: true,
+    includesAccidental: offer?.includesAccidental ?? true,
     frictionCost: d.frictionCost,
     daysOutsideAustralia: 0,
     ccExtensionMonths: d.ccExtensionMonths,
     ccExcess: d.ccExcess,
-    quotedPremium: '',
-    quotedExcess: d.quotedExcess,
+    quotedPremium: offer ? offer.quotedPremium : '',
+    quotedExcess: offer?.quotedExcess ?? d.quotedExcess,
+    userEditedPremium: false,
     assumptions: {
       failureRate: first?.defaults.failureRate ?? 15,
       accidentRate: first?.defaults.accidentRate ?? 20,
@@ -135,11 +145,13 @@ export default function InputFlow({
   state,
   onChange,
   onOpenExpert,
+  pricing,
 }: {
   categories: CategoryInfo[];
   state: FormState;
   onChange: (next: FormState) => void;
   onOpenExpert: () => void;
+  pricing: EwPricingConfig;
 }) {
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     onChange({ ...state, [key]: value });
@@ -147,6 +159,7 @@ export default function InputFlow({
   const handleCategoryChange = (key: string) => {
     const cat = categories.find((c) => c.key === key);
     if (!cat) return;
+    const offer = suggestedOffer(pricing, state.productPrice, key, state.mfrYears);
     onChange({
       ...state,
       productCategory: key,
@@ -156,6 +169,14 @@ export default function InputFlow({
         repairRatio: cat.defaults.repairRatio,
         hazard: { ...state.assumptions.hazard },
       },
+      ...(state.userEditedPremium
+        ? {}
+        : {
+            extendedWarrantyYears: offer.extendedWarrantyYears,
+            quotedPremium: offer.quotedPremium,
+            quotedExcess: offer.quotedExcess,
+            includesAccidental: offer.includesAccidental,
+          }),
     });
   };
 
@@ -300,7 +321,10 @@ export default function InputFlow({
 
       <StepCard n={4} title="What paid warranty have you been offered?" subtitle="The details from the offer or checkout page.">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Extended warranty (years)" hint="Years of paid cover from the day you buy — it starts at purchase, not after the manufacturer's warranty ends.">
+          <Field
+            label="Extended warranty (years)"
+            hint="Years of paid cover from the day you buy — it starts at purchase, not after the manufacturer's warranty ends. Default suggests 2 years beyond the manufacturer's warranty."
+          >
             <input
               type="number"
               min={0}
@@ -314,7 +338,13 @@ export default function InputFlow({
               type="number"
               min={0}
               value={state.quotedPremium}
-              onChange={(e) => set('quotedPremium', e.target.value === '' ? '' : Number(e.target.value))}
+              onChange={(e) =>
+                onChange({
+                  ...state,
+                  quotedPremium: e.target.value === '' ? '' : Number(e.target.value),
+                  userEditedPremium: true,
+                })
+              }
               className={inputCls}
             />
           </Field>

@@ -17,15 +17,21 @@ import type { CategoryInfo } from './categories';
 import type { ExtractedProduct } from './extractTypes';
 import type { Assumptions } from './AssumptionsPanel';
 import type { CalculatorDefaults } from '../lib/publicTypes';
+import type { EwPricingConfig } from '../lib/ewPricingModel';
+import { suggestedOffer } from '../lib/ewPricingModel';
 
 export default function Analyzer({
   categories,
   defaults,
+  pricing,
 }: {
   categories: CategoryInfo[];
   defaults: CalculatorDefaults;
+  pricing: EwPricingConfig;
 }) {
-  const [form, setForm] = useState<FormState>(() => makeInitialState(categories, defaults));
+  const [form, setForm] = useState<FormState>(() =>
+    makeInitialState(categories, defaults, pricing)
+  );
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
   const [evalError, setEvalError] = useState(false);
   const [linkPanelOpen, setLinkPanelOpen] = useState(true);
@@ -92,11 +98,25 @@ export default function Analyzer({
       : null;
 
   const applyProduct = (product: ExtractedProduct) => {
-    setForm((prev) => ({
-      ...prev,
-      productPrice: product.price ?? prev.productPrice,
-      productCategory: product.categoryKey ?? prev.productCategory,
-    }));
+    setForm((prev) => {
+      const nextCategory = product.categoryKey ?? prev.productCategory;
+      const nextPrice = product.price ?? prev.productPrice;
+      const categoryChanged = nextCategory !== prev.productCategory;
+      const offer = suggestedOffer(pricing, nextPrice, nextCategory, prev.mfrYears);
+      return {
+        ...prev,
+        productPrice: nextPrice,
+        productCategory: nextCategory,
+        // Re-suggest the market offer when the product changes, unless the
+        // user has already edited the premium (typed their own quote).
+        ...(prev.userEditedPremium && !categoryChanged ? {} : {
+          extendedWarrantyYears: offer.extendedWarrantyYears,
+          quotedPremium: offer.quotedPremium,
+          quotedExcess: offer.quotedExcess,
+          includesAccidental: offer.includesAccidental,
+        }),
+      };
+    });
     if (product.name) setProductName(product.name);
     setLinkPanelOpen(false);
   };
@@ -143,6 +163,7 @@ export default function Analyzer({
             categories={categories}
             state={form}
             onChange={setForm}
+            pricing={pricing}
             onOpenExpert={() => {
               setExpertOpen(true);
               document.getElementById('numbers')?.scrollIntoView({ behavior: 'smooth' });

@@ -3,9 +3,11 @@ import 'server-only';
 import { createClient } from '@supabase/supabase-js';
 import type { CategoryRule, CalculatorDefaults, Jurisdiction, JurisdictionRule } from '../lib/publicTypes';
 import type { UsTierRule } from '../lib/publicTypes';
+import type { EwPricingConfig } from '../lib/ewPricingModel';
 import { fallbackRule } from '../lib/jurisdictionRules';
 import { fallbackCategoryRule } from '../lib/categoryRules';
 import { usTierRule, usTierOf } from '../lib/usTierRules';
+import { EW_PRICING_FALLBACK } from '../lib/ewPricingModel';
 
 function client() {
   return createClient(
@@ -95,6 +97,50 @@ export async function getCalculatorDefaults(): Promise<CalculatorDefaults> {
     return { ...CALCULATOR_DEFAULTS_FALLBACK, ...(data.value as Partial<CalculatorDefaults>) };
   } catch {
     return CALCULATOR_DEFAULTS_FALLBACK;
+  }
+}
+
+// Reads the ew_pricing_* tables (inspectable, editable in the database
+// dashboard). Falls back to the code copy if the database is unreachable.
+export async function getEwPricingConfig(): Promise<EwPricingConfig> {
+  try {
+    const [ratesRes, termsRes, paramsRes] = await Promise.all([
+      client().from('ew_pricing_rates').select('category_key, base_rate'),
+      client().from('ew_pricing_term_multipliers').select('extra_years, multiplier'),
+      client().from('ew_pricing_params').select('key, value'),
+    ]);
+    if (ratesRes.error || termsRes.error || paramsRes.error) {
+      throw new Error(ratesRes.error?.message ?? termsRes.error?.message ?? paramsRes.error?.message ?? 'db_error');
+    }
+    if (!ratesRes.data?.length || !termsRes.data?.length || !paramsRes.data?.length) {
+      throw new Error('empty');
+    }
+    const rates: Record<string, number> = {};
+    for (const row of ratesRes.data as { category_key: string; base_rate: number }[]) {
+      rates[row.category_key] = Number(row.base_rate);
+    }
+    const termMultipliers: Record<number, number> = {};
+    for (const row of termsRes.data as { extra_years: number; multiplier: number }[]) {
+      termMultipliers[row.extra_years] = Number(row.multiplier);
+    }
+    const params = new Map(
+      (paramsRes.data as { key: string; value: number }[]).map((r) => [r.key, Number(r.value)])
+    );
+    const pick = (key: string, fb: number) => {
+      const v = params.get(key);
+      return v === undefined || !Number.isFinite(v) ? fb : v;
+    };
+    return {
+      rates,
+      termMultipliers,
+      adldDefectOnly: pick('adld_defect_only', EW_PRICING_FALLBACK.adldDefectOnly),
+      adldWithAccidental: pick('adld_with_accidental', EW_PRICING_FALLBACK.adldWithAccidental),
+      excessUnder500: pick('excess_tier_under_500', EW_PRICING_FALLBACK.excessUnder500),
+      excess500To1500: pick('excess_tier_500_to_1500', EW_PRICING_FALLBACK.excess500To1500),
+      excessOver1500: pick('excess_tier_over_1500', EW_PRICING_FALLBACK.excessOver1500),
+    };
+  } catch {
+    return { ...EW_PRICING_FALLBACK };
   }
 }
 
