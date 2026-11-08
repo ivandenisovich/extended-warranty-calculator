@@ -3,115 +3,24 @@
 import 'server-only';
 
 import type {
+  CategoryRule,
   EvaluationResult,
   HazardShape,
+  Jurisdiction,
+  JurisdictionRule,
+  UsTierRule,
 } from '../lib/publicTypes';
+import { fallbackRule } from '../lib/jurisdictionRules';
+import { fallbackCategoryRule } from '../lib/categoryRules';
 
 export type { EvaluationResult };
 
-export interface CategoryConfig {
-  name: string;
-  failureRate: number; // Baseline 5-year total risk percentage
-  accidentalShare: number; // Portion of total failures due to accidental damage
-  repairRatio: number; // Repair cost as ratio of price
-  hazard: HazardShape;
-  aclRules: {
-    priceTiers: [number, number];
-    years: [number, number, number];
-  };
-}
-
-export const DEFAULT_HAZARD: HazardShape = {
-  infantStrength: 0.6,
-  infantDecay: 1.2,
-  background: 0.2,
-  wearOutStrength: 0.5,
-  accidentalFrontLoad: 0.5,
-};
-
-export const CATEGORIES: Record<string, CategoryConfig> = {
-  smartphones: {
-    name: 'Smartphones & Mobile Devices',
-    failureRate: 25,
-    accidentalShare: 0.4,
-    repairRatio: 0.35,
-    hazard: { ...DEFAULT_HAZARD },
-    aclRules: {
-      priceTiers: [500, 1500],
-      years: [2, 3, 4],
-    },
-  },
-  laptops: {
-    name: 'Laptops & Computers',
-    failureRate: 20,
-    accidentalShare: 0.3,
-    repairRatio: 0.4,
-    hazard: { ...DEFAULT_HAZARD },
-    aclRules: {
-      priceTiers: [800, 2000],
-      years: [2, 3, 5],
-    },
-  },
-  tvs: {
-    name: 'TVs & Home Entertainment',
-    failureRate: 12,
-    accidentalShare: 0.1,
-    repairRatio: 0.5,
-    hazard: { ...DEFAULT_HAZARD },
-    aclRules: {
-      priceTiers: [800, 2500],
-      years: [3, 5, 7],
-    },
-  },
-  appliances: {
-    name: 'Whitegoods & Appliances',
-    failureRate: 15,
-    accidentalShare: 0.05,
-    repairRatio: 0.45,
-    hazard: { ...DEFAULT_HAZARD },
-    aclRules: {
-      priceTiers: [600, 2000],
-      years: [3, 5, 8],
-    },
-  },
-  audio: {
-    name: 'Audio & Headphones',
-    failureRate: 18,
-    accidentalShare: 0.25,
-    repairRatio: 0.3,
-    hazard: { ...DEFAULT_HAZARD },
-    aclRules: {
-      priceTiers: [300, 1000],
-      years: [2, 3, 4],
-    },
-  },
-};
-
-// Ordered category list + defaults for the client (no model parameters).
-export function publicCategoryList(): {
-  key: string;
-  name: string;
-  defaults: { failureRate: number; accidentalShare: number; repairRatio: number };
-}[] {
-  return Object.entries(CATEGORIES).map(([key, cat]) => ({
-    key,
-    name: cat.name,
-    defaults: {
-      failureRate: cat.failureRate,
-      accidentalShare: Math.round(cat.accidentalShare * 100),
-      repairRatio: Math.round(cat.repairRatio * 100),
-    },
-  }));
-}
-
-export function getEstimatedAclYears(categoryKey: string, price: number): number {
-  const cat = CATEGORIES[categoryKey] || CATEGORIES.smartphones;
-  const [tier1, tier2] = cat.aclRules.priceTiers;
-  const [yrLow, yrMid, yrHigh] = cat.aclRules.years;
-
-  if (price < tier1) return yrLow;
-  if (price <= tier2) return yrMid;
-  return yrHigh;
+// The estimate comes from the category's price tiers: below tier1_price ->
+// years_low, up to tier2_price -> years_mid, above -> years_high.
+export function getEstimatedAclYears(cat: CategoryRule, price: number): number {
+  if (price < cat.tier1_price) return cat.years_low;
+  if (price <= cat.tier2_price) return cat.years_mid;
+  return cat.years_high;
 }
 
 export interface EvaluationInput {
@@ -122,12 +31,30 @@ export interface EvaluationInput {
   ccExtensionMonths: number;
   ccExcess: number;
   ownershipYears: number;
-  jurisdiction: 'australia' | 'other';
+  jurisdiction: Jurisdiction;
   includesAccidental: boolean;
   frictionCost: number;
+  // The category's estimate parameters, loaded from the category_rules
+  // database table (fallback copy used if unreachable).
+  categoryRule?: CategoryRule;
+  // The jurisdiction's statutory-law parameters, loaded from the
+  // jurisdiction_rules database table (fallback copy used if unreachable).
+  rule?: JurisdictionRule;
+  // For US purchases: the state's consumer-rights tier, loaded from the
+  // us_consumer_tiers table via the state's mapping. Replaces the
+  // jurisdiction placeholder rule when present.
+  usTier?: UsTierRule;
+  // Credit card purchase protection: covers accidental damage for N days from purchase
+  purchaseProtectionDays?: number;
+  // Quoted paid-warranty excess; when > 0, its accident claims lose to the
+  // card's excess-free purchase protection during the overlap
+  quotedExcess?: number;
+  // Days per year the item travels overseas: there, claiming under ACL is
+  // impractical, so a slice of overlap-period defects earns the paid warranty value
+  daysOutsideAustralia?: number;
   // Optional user-tuned assumptions; fall back to category defaults
   failureRate?: number;
-  accidentalShare?: number;
+  accidentRate?: number;
   repairRatio?: number;
   hazard?: Partial<HazardShape>;
 }
@@ -181,21 +108,45 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     includesAccidental,
     frictionCost,
   } = input;
+  const daysOutsideAustralia = Math.min(365, Math.max(0, input.daysOutsideAustralia ?? 0));
 
-  const isAustralia = jurisdiction === 'australia';
-  const catConfig = CATEGORIES[productCategory] || CATEGORIES.smartphones;
+  const rule: JurisdictionRule = input.rule ?? fallbackRule(jurisdiction);
+  const cat: CategoryRule = input.categoryRule ?? fallbackCategoryRule(productCategory);
+  const usTier: UsTierRule | undefined = input.usTier;
+  // A US state's tier rule replaces the 'united-states' placeholder
+  const hasStatutory = usTier
+    ? usTier.duration_model !== 'none'
+    : rule.flat_years !== 0 || rule.duration_model === 'category_estimate';
+  const isUk = rule.value_model === 'uk_step_decline';
+  const isEu = rule.value_model === 'eu_reversal_step';
 
   // Tunable assumptions (fall back to category defaults)
-  const failureRate = input.failureRate ?? catConfig.failureRate;
-  const accidentalShare = clamp(input.accidentalShare ?? catConfig.accidentalShare, 0, 1);
-  const repairRatio = input.repairRatio ?? catConfig.repairRatio;
-  const hazard: HazardShape = { ...DEFAULT_HAZARD, ...(input.hazard ?? {}) };
+  const failureRate = input.failureRate ?? cat.failure_rate;
+  const accidentRate = clamp(input.accidentRate ?? cat.accident_rate, 0, 100) / 100;
+  const repairRatio = input.repairRatio ?? cat.repair_ratio;
+  const hazard: HazardShape = {
+    infantStrength: cat.infant_strength,
+    infantDecay: cat.infant_decay,
+    background: cat.background,
+    wearOutStrength: cat.wear_out_strength,
+    accidentalFrontLoad: cat.accidental_front_load,
+    ...(input.hazard ?? {}),
+  };
 
   const repairCost = productPrice * repairRatio;
 
-  const estimatedAclYears = isAustralia
-    ? getEstimatedAclYears(productCategory, productPrice)
-    : 0;
+  // Statutory duration from the jurisdiction rule: flat, or the category
+  // estimate bounded by the rule's floor and cap.
+  const rawEstimate = getEstimatedAclYears(cat, productPrice);
+  const estimatedAclYears = !hasStatutory
+    ? 0
+    : usTier
+      ? usTier.duration_model === 'flat'
+        ? (usTier.flat_years ?? 0)
+        : Math.min(usTier.cap_years ?? Infinity, rawEstimate)
+      : rule.duration_model === 'flat'
+        ? (rule.flat_years ?? 0)
+        : Math.max(rule.min_years ?? 0, Math.min(rule.cap_years ?? Infinity, rawEstimate));
 
   // Total failure probability scales with ownership duration along the hazard
   // curve: a 5-year baseline rate is the reference point, and shorter/longer
@@ -207,9 +158,9 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   const scale5 = hazardWeightsFor(hazard, 5).reduce((a, b) => a + b, 0);
   const totalFailureProb = Math.min(1, (baseline5Risk / scale5) * cumulativeRisk);
 
-  const defectShare = 1 - accidentalShare;
-  const totalDefectProb = totalFailureProb * defectShare;
-  const totalAccidentalProb = totalFailureProb * accidentalShare;
+  const totalDefectProb = Math.min(1, (failureRate / 100 / scale5) * cumulativeRisk);
+  const totalAccidentalProb = accidentRate === 0 ? 0 : Math.min(1, (accidentRate / scale5) * cumulativeRisk);
+  const overseasFraction = hasStatutory ? clamp(daysOutsideAustralia / 365, 0, 1) : 0;
 
   const mfrMonths = mfrYears * 12;
   const aclMonths = estimatedAclYears * 12;
@@ -224,11 +175,12 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   const annualTimeline: EvaluationResult['annualTimeline'] = [];
   let mfrRisk = 0;
   let aclRisk = 0;
+  let aclValueRisk = 0;
   let ccRisk = 0;
   let ewOverlapRisk = 0;
   let ewPostAclRisk = 0;
-  let ewNetRisk = 0;
   let ewOverlapDefect = 0;
+  let ewOverlapOverseasDefect = 0;
   let ewOverlapAcc = 0;
   let ewPostDefect = 0;
   let ewPostAcc = 0;
@@ -237,7 +189,7 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   let uncoveredAcc = 0;
   const allCoverEndMonths = Math.max(
     mfrMonths,
-    isAustralia ? aclMonths : 0,
+    hasStatutory ? aclMonths : 0,
     ewEndMonths
   );
   const uncoveredStartMonth = allCoverEndMonths + 1;
@@ -253,8 +205,29 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
       mfrRisk += pDefect;
     }
 
-    if (isAustralia && endMonth <= aclMonths) {
+    if (hasStatutory && endMonth <= aclMonths) {
       aclRisk += pDefect;
+    }
+
+    // Statutory value per the rule's value model: UK steps down at month 6
+    // (haircut_size of value lost) then declines linearly to zero; EU steps
+    // down at the reversal month then holds at (1 - haircut_size);
+    // Australia/NZ stay at full value.
+    if (rule.value_model === 'uk_step_decline' || rule.value_model === 'eu_reversal_step') {
+      const coveredEnd = Math.min(endMonth, aclMonths);
+      const stepMonth = rule.step_month ?? 6;
+      const postStepValue = 1 - (rule.haircut_size ?? 0.25);
+      let valueSum = 0;
+      for (let m = startMonth; m <= coveredEnd; m++) {
+        if (m <= stepMonth) {
+          valueSum += 1;
+        } else if (rule.value_model === 'uk_step_decline') {
+          valueSum += (postStepValue * (aclMonths - m)) / (aclMonths - stepMonth);
+        } else {
+          valueSum += postStepValue;
+        }
+      }
+      aclValueRisk += (pDefect / 12) * valueSum;
     }
 
     const activeEwStartMonth = startMonth;
@@ -266,16 +239,17 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
       const ewDefectInYear = pDefect * monthFraction;
       const ewAccidentalInYear = includesAccidental ? pAccidental * monthFraction : 0;
 
-      // Free cover runs from purchase too: maker's warranty first, then ACL.
-      const freeEnd = Math.max(mfrMonths, isAustralia ? aclMonths : 0);
+      // Free cover runs from purchase too: maker's warranty first, then statutory rights.
+      const freeEnd = Math.max(mfrMonths, hasStatutory ? aclMonths : 0);
       const overlapEnd = Math.min(activeEwEndMonth, freeEnd);
       if (overlapEnd >= activeEwStartMonth) {
         const overlapMonthsInYear = overlapEnd - activeEwStartMonth + 1;
         const f = overlapMonthsInYear / activeEwMonthsCount;
         ewOverlapRisk += (ewDefectInYear + ewAccidentalInYear) * f;
         ewOverlapDefect += ewDefectInYear * f;
+        const overseasDefect = ewDefectInYear * f * overseasFraction;
+        ewOverlapOverseasDefect += overseasDefect;
         ewOverlapAcc += ewAccidentalInYear * f;
-        if (includesAccidental) ewNetRisk += ewAccidentalInYear * f;
       }
 
       const postAclStart = Math.max(activeEwStartMonth, freeEnd + 1);
@@ -285,7 +259,6 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
         ewPostAclRisk += (ewDefectInYear + ewAccidentalInYear) * f;
         ewPostDefect += ewDefectInYear * f;
         ewPostAcc += ewAccidentalInYear * f;
-        ewNetRisk += (ewDefectInYear + ewAccidentalInYear) * f;
       }
     }
 
@@ -314,16 +287,65 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     });
   }
 
+  // Hassle avoided: overlap-period defects claimed on the warranty instead of
+  // through your legal rights. The overseas slice was never ACL-usable, so it
+  // saves no hassle and is excluded.
+  const hassleAvoidance = hasStatutory
+    ? (ewOverlapDefect - ewOverlapOverseasDefect) * frictionCost
+    : 0;
+
+  // Credit card purchase protection: accidental damage covered for ppDays from
+  // purchase, with no excess. Risk is read off the same accident curve as the
+  // "When failures happen" chart, pro-rated for the covered slice of each year.
+  const ppDays = Math.min(3650, Math.max(0, input.purchaseProtectionDays ?? 0));
+  const accidentRiskWithinDays = (days: number) =>
+    accidentalWeights.reduce(
+      (sum, w, i) => sum + w * totalAccidentalProb * clamp((days - i * 365) / 365, 0, 1),
+      0
+    );
+  const ppAccRisk = accidentRiskWithinDays(ppDays);
+
+  // Accident claims in the overlap always belong to the card's purchase
+  // protection: it charges no excess, so it beats the paid warranty even when
+  // the warranty's own excess is 0. That slice is worth $0 to the warranty.
+  const ewPpOverlapAcc = accidentRiskWithinDays(
+    Math.min(ppDays, (ewEndMonths / 12) * 365)
+  );
+  const ewAccTotal = ewOverlapAcc + ewPostAcc;
+  const ewAccCounted = includesAccidental
+    ? Math.max(0, ewAccTotal - ewPpOverlapAcc)
+    : 0;
+
+  // Credit card extended warranty: in the extra months the card adds, defect
+  // claims go to the card for free, so that window is worth $0 to the paid
+  // warranty (mirrors purchase protection vs accidental claims).
+  const freeCoverEndMonths = Math.max(mfrMonths, hasStatutory ? aclMonths : 0);
+  const ccOverlapStartMonth = freeCoverEndMonths + 1;
+  const ccOverlapEndMonth = Math.min(ccEndMonths, ewEndMonths);
+  let ewCcOverlapDefect = 0;
+  for (let m = ccOverlapStartMonth; m <= ccOverlapEndMonth; m++) {
+    const y = Math.ceil(m / 12);
+    if (y > totalYears) break;
+    ewCcOverlapDefect += (defectWeights[y - 1] * totalDefectProb) / 12;
+  }
+
+  const ewNetRisk =
+    ewOverlapOverseasDefect + ewPostDefect - ewCcOverlapDefect + ewAccCounted;
+
   const mfrEV = mfrRisk * repairCost;
-  const aclEV = isAustralia ? aclRisk * Math.max(0, repairCost - frictionCost) : 0;
-  const ewEV = ewNetRisk * repairCost;
+  // A tier's value_factor devalues statutory claims (e.g. 0.75 when the
+  // burden of proof sits with the customer)
+  const aclFactor = usTier ? usTier.value_factor : 1;
+  const aclEV = (isUk || isEu ? aclValueRisk : aclRisk) * repairCost * aclFactor;
+  const ewEV = ewNetRisk * repairCost + hassleAvoidance;
+  const ppEV = ppAccRisk * repairCost;
   const ccEV = ccRisk * Math.max(0, repairCost - ccExcess);
 
   // Net value matrix at price-scaled excess levels. The premium axis adapts to
   // the break-even range so positive and net-neutral combinations are visible.
   const excessLevels = scaledExcessLevels(productPrice);
 
-  const fairAt = (exc: number) => ewNetRisk * Math.max(0, repairCost - exc);
+  const fairAt = (exc: number) => ewNetRisk * Math.max(0, repairCost - exc) + hassleAvoidance;
   const breakEvenLevels = excessLevels.map((exc) => ({
     excess: exc,
     breakEvenPremium: Math.round(fairAt(exc) * 100) / 100,
@@ -347,7 +369,7 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     grid.push(row);
   }
 
-  const freeCoverEnd = Math.max(mfrMonths, isAustralia ? aclMonths : 0);
+  const freeCoverEnd = freeCoverEndMonths;
   const overlapMonths = Math.max(0, Math.min(freeCoverEnd, ewEndMonths));
   const postAclMonths = Math.max(0, ewEndMonths - freeCoverEnd);
 
@@ -355,8 +377,8 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     repairCost: Math.round(repairCost),
     estimatedAclYears,
     totalFailureRatePct: Number((totalFailureProb * 100).toFixed(1)),
-    defectFailureRatePct: Number((totalFailureProb * defectShare * 100).toFixed(1)),
-    accidentalFailureRatePct: Number((totalFailureProb * (1 - defectShare) * 100).toFixed(1)),
+    defectFailureRatePct: Number((totalDefectProb * 100).toFixed(1)),
+    accidentalFailureRatePct: Number((totalAccidentalProb * 100).toFixed(1)),
     mfrTrack: {
       riskPercentage: Number((mfrRisk * 100).toFixed(1)),
       expectedValue: Math.round(mfrEV),
@@ -370,7 +392,13 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
       overlapRiskPercentage: Number((ewOverlapRisk * 100).toFixed(1)),
       postAclRiskPercentage: Number((ewPostAclRisk * 100).toFixed(1)),
       overlapDefectRiskPercentage: Number((ewOverlapDefect * 100).toFixed(1)),
+      overlapOverseasDefectRiskPercentage: Number((ewOverlapOverseasDefect * 100).toFixed(1)),
+      overlapAclClaimableDefectRiskPercentage: Number(((ewOverlapDefect - ewOverlapOverseasDefect) * 100).toFixed(1)),
       overlapAccidentalRiskPercentage: Number((ewOverlapAcc * 100).toFixed(1)),
+      accidentalRiskPercentage: Number((ewAccTotal * 100).toFixed(1)),
+      ppOverlapAccidentalRiskPercentage: Number((ewPpOverlapAcc * 100).toFixed(1)),
+      ccOverlapDefectRiskPercentage: Number((ewCcOverlapDefect * 100).toFixed(1)),
+      ccOverlapMonths: Math.max(0, ccOverlapEndMonth - freeCoverEndMonths),
       postAclDefectRiskPercentage: Number((ewPostDefect * 100).toFixed(1)),
       postAclAccidentalRiskPercentage: Number((ewPostAcc * 100).toFixed(1)),
       netRiskPercentage: Number((ewNetRisk * 100).toFixed(1)),
@@ -383,6 +411,11 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     ccTrack: {
       riskPercentage: Number((ccRisk * 100).toFixed(1)),
       expectedValue: Math.round(ccEV),
+    },
+    ccPurchaseProtection: {
+      days: ppDays,
+      riskPercentage: Number((ppAccRisk * 100).toFixed(1)),
+      expectedValue: Math.round(ppEV),
     },
     uncovered: {
       riskPercentage: Number((uncoveredRisk * 100).toFixed(1)),
@@ -400,10 +433,11 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
       levels: breakEvenLevels,
       atZeroExcess,
       netRiskProb: ewNetRisk,
+      hassleAvoidance: Math.round(hassleAvoidance * 100) / 100,
     },
     assumed: {
       failureRate,
-      accidentalShare,
+      accidentRate: accidentRate * 100,
       repairRatio,
       hazard,
     },

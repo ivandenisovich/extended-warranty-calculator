@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   AreaChart,
   Area,
@@ -10,8 +11,9 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import type { EvaluationResult } from '../lib/publicTypes';
+import type { EvaluationResult, Jurisdiction } from '../lib/publicTypes';
 import AssumptionsPanel, { type Assumptions, type CategoryDefaultsShape } from './AssumptionsPanel';
+import { jurisdictionCountryName, lawShortName } from './InputFlow';
 
 // ThingyCare palette for chart series
 const TEAL = '#36949b';
@@ -29,6 +31,7 @@ interface Segment {
   tooltip: string;
   label?: string;
   striped?: boolean;
+  showLabelAlways?: boolean;
 }
 
 // Green/red with opacity scaled to how good the combination is: full green at
@@ -136,7 +139,7 @@ function TrackBar({
                 backgroundImage: s.striped ? stripeBackground(s.color) : undefined,
               }}
             >
-              {s.widthPct > 9 ? (
+              {s.widthPct > 9 || s.showLabelAlways ? (
                 <span className={`group relative cursor-help ${s.striped ? 'rounded bg-white/85 px-1' : ''}`}>
                   {s.label ?? `${s.riskPct}%`}
                   <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block w-44 rounded-lg bg-tc-navy text-white text-[11px] font-normal font-sans px-2.5 py-1.5 text-center leading-snug shadow-lg z-20">
@@ -159,6 +162,8 @@ export default function NumbersSection({
   ccExtensionMonths,
   ccExcess,
   includesAccidental,
+  daysOutsideAustralia,
+  jurisdiction,
   assumptions,
   onAssumptionsChange,
   categoryDefaults,
@@ -171,13 +176,18 @@ export default function NumbersSection({
   ccExtensionMonths: number;
   ccExcess: number;
   includesAccidental: boolean;
+  daysOutsideAustralia: number;
+  jurisdiction: Jurisdiction;
   assumptions: Assumptions;
   onAssumptionsChange: (a: Assumptions) => void;
   categoryDefaults: CategoryDefaultsShape;
   expertOpen: boolean;
   onToggleExpert: () => void;
 }) {
+  const [chartsOpen, setChartsOpen] = useState(false);
   const isAustralia = evaluation.estimatedAclYears > 0;
+  const countryName = jurisdictionCountryName(jurisdiction);
+  const lawShort = lawShortName(jurisdiction);
   const flatNet = evaluation.matrix.grid.flat();
   const bestNet = Math.max(...flatNet.map((c) => c.netValue), 0);
   const worstNet = Math.min(...flatNet.map((c) => c.netValue), 0);
@@ -205,10 +215,30 @@ export default function NumbersSection({
 
   const mfrTooltip = `${evaluation.mfrTrack.riskPercentage}% of the expected failures (all defects — the manufacturer's warranty never covers accidents) happen while the manufacturer's warranty covers you. This risk is covered free.`;
   const aclExtraTooltip = `A further ${+(evaluation.aclTrack.riskPercentage - evaluation.mfrTrack.riskPercentage).toFixed(1)}% of failures (all defects — your legal rights don't cover accidents) happen after the manufacturer's warranty ends but while your legal rights still cover you. Also free.`;
-  const ewDefectOverlapTooltip =`${evaluation.ewTrack.overlapDefectRiskPercentage}% of failures are defects that happen while the paid warranty overlaps your free cover (manufacturer's warranty or your legal rights). The paid warranty makes you use those remedies first, so this slice adds 0% of extra cover.`;
+  const ewDefectOverlapTooltip =`${evaluation.ewTrack.overlapDefectRiskPercentage}% of failures are defects that happen while the paid warranty overlaps your free cover (manufacturer's warranty or your legal rights). In ${countryName} this slice normally adds 0% — you'd claim under your legal rights instead${daysOutsideAustralia > 0 ? `, but for the ${daysOutsideAustralia} days a year you have the item overseas, claiming from ${countryName} is impractical, so the paid warranty's ${evaluation.ewTrack.overlapOverseasDefectRiskPercentage}% share is counted` : ''}${evaluation.breakEven.hassleAvoidance > 0 ? `. Claiming these ${evaluation.ewTrack.overlapAclClaimableDefectRiskPercentage}% on the warranty instead of arguing your legal rights saves an estimated ${evaluation.breakEven.hassleAvoidance.toFixed(0)} of hassle, which is added to the warranty's value` : ''}.`;
+  const ewDefectOverseasTooltip = `${evaluation.ewTrack.overlapOverseasDefectRiskPercentage}% of failures are defects during the ${daysOutsideAustralia} days a year you have the item overseas. Your legal rights are hard to use from abroad, but the paid warranty handles claims there, so this slice counts toward its value.`;
   const ewDefectPostTooltip = `${evaluation.ewTrack.postAclDefectRiskPercentage}% of failures are defects in the stretch where only the paid warranty covers you. This is the part that earns its keep.`;
-  const ewAccOverlapTooltip = `${evaluation.ewTrack.overlapAccidentalRiskPercentage}% of failures are accidental damage (drops, spills) while the paid warranty overlaps your free cover. This is the only remedy that covers accidents, so this slice is exactly where the paid warranty earns its keep.`;
+  const ewCcOverlapMonths = evaluation.ewTrack.ccOverlapMonths;
+  const ccOverlapWidthPct = pct(ewCcOverlapMonths);
+  const hasCcOverlap = ewCcOverlapMonths > 0 && evaluation.ewTrack.ccOverlapDefectRiskPercentage > 0;
+  const ccOverlapDefectPct = evaluation.ewTrack.ccOverlapDefectRiskPercentage;
+  const ewDefectCcOverlapTooltip = `${ccOverlapDefectPct}% of failures are defects in the ${ewCcOverlapMonths} months your card's extended warranty also covers — the card pays these for free, so this slice is worth $0 to the paid warranty.`;
+  const ewAccOverlapTooltip = `${evaluation.ewTrack.overlapAccidentalRiskPercentage}% of failures are accidental damage (drops, spills) while the paid warranty overlaps your free cover.`;
   const ewAccPostTooltip = `${evaluation.ewTrack.postAclAccidentalRiskPercentage}% of failures are accidental damage in the stretch where only the paid warranty covers you.`;
+
+  // --- Accidents section: purchase protection vs paid warranty ---
+  const purchaseProtection = evaluation.ccPurchaseProtection;
+  const ppWidthPct = Math.min(100, (purchaseProtection.days / 365 / ownershipYears) * 100);
+  // The paid warranty's accident bar splits at the card's protection window, not at the ACL boundary
+  const ppOverlapWidthPct = purchaseProtection.days > 0 ? ppWidthPct : 0;
+  const ppZeroOverlap = purchaseProtection.days > 0 && evaluation.ewTrack.ppOverlapAccidentalRiskPercentage > 0;
+  const remainingAccPct =
+    +(evaluation.ewTrack.accidentalRiskPercentage - (purchaseProtection.days > 0 ? evaluation.ewTrack.ppOverlapAccidentalRiskPercentage : 0)).toFixed(1);
+  const ppTooltip = `${purchaseProtection.riskPercentage}% of failures are accidents in the first ${purchaseProtection.days} days after purchase. Your card covers these for free, with no excess.`;
+  const ewAccPpOverlapTooltip = purchaseProtection.days > 0
+    ? `${evaluation.ewTrack.ppOverlapAccidentalRiskPercentage}% of failures are accidents while both the paid warranty and your card's purchase protection cover you. The card has no excess and pays these claims for free, so this slice is worth $0 to the paid warranty.`
+    : '';
+  const ewAccRestTooltip = `The remaining ${remainingAccPct}% of failures are accidents covered by the paid warranty and nothing else. This is the slice that earns its keep.`;
   const ccRedundant =
     ccExtensionMonths > 0 &&
     evaluation.estimatedAclYears > 0 &&
@@ -325,7 +355,7 @@ export default function NumbersSection({
           />
           {isAustralia && (
             <TrackBar
-              label="Your legal rights (ACL)"
+              label={`Your legal rights (${lawShort})`}
               gridlines={gridlines}
               segments={[
                 { leftPct: 0, widthPct: trackPcts.mfr, riskPct: evaluation.mfrTrack.riskPercentage, color: TEAL, text: 'light', tooltip: mfrTooltip },
@@ -337,8 +367,41 @@ export default function NumbersSection({
             label="Paid warranty — defects"
             gridlines={gridlines}
             segments={[
-              { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapDefectRiskPercentage, color: LIME, text: 'light', tooltip: ewDefectOverlapTooltip, label: '0%', striped: true },
-              { leftPct: trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclDefectRiskPercentage, color: '#93d95e', text: 'light', tooltip: ewDefectPostTooltip },
+              ...(evaluation.ewTrack.overlapOverseasDefectRiskPercentage > 0 ? [{
+                leftPct: 0,
+                widthPct: trackPcts.ewOverlap,
+                riskPct: evaluation.ewTrack.overlapOverseasDefectRiskPercentage,
+                color: LIME,
+                text: 'light' as const,
+                tooltip: ewDefectOverseasTooltip,
+              }] : [{
+                leftPct: 0,
+                widthPct: trackPcts.ewOverlap,
+                riskPct: evaluation.ewTrack.overlapDefectRiskPercentage,
+                color: LIME,
+                text: 'light' as const,
+                tooltip: ewDefectOverlapTooltip,
+                label: '0%',
+                striped: true,
+              }]),
+              {
+                leftPct: trackPcts.ewOverlap,
+                widthPct: hasCcOverlap ? ccOverlapWidthPct : 0,
+                riskPct: hasCcOverlap ? ccOverlapDefectPct : 0,
+                color: LIME,
+                text: 'light' as const,
+                tooltip: ewDefectCcOverlapTooltip,
+                label: '0%',
+                striped: true,
+              },
+              {
+                leftPct: trackPcts.ewOverlap + (hasCcOverlap ? ccOverlapWidthPct : 0),
+                widthPct: Math.max(0, trackPcts.ewPostAcl - (hasCcOverlap ? ccOverlapWidthPct : 0)),
+                riskPct: +(evaluation.ewTrack.postAclDefectRiskPercentage - (hasCcOverlap ? ccOverlapDefectPct : 0)).toFixed(1),
+                color: '#93d95e',
+                text: 'light' as const,
+                tooltip: ewDefectPostTooltip,
+              },
             ]}
           />
           <TrackBar
@@ -359,6 +422,9 @@ export default function NumbersSection({
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: NAVY }} /> Manufacturer's warranty</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: TEAL }} /> Your legal rights</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (overlaps free cover)</span>
+          {evaluation.ewTrack.overlapOverseasDefectRiskPercentage <= 0 && (
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: stripeBackground(LIME) }} /> Striped: worth $0 here, other cover already pays</span>
+          )}
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#93d95e' }} /> Paid warranty (only this covers you)</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: ORANGE }} /> Credit card extension</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: stripeBackground('#9aa5b8') }} /> Striped: worth $0 here, other cover already pays</span>
@@ -372,33 +438,86 @@ export default function NumbersSection({
         <section className="bg-tc-surface border border-tc-border rounded-2xl p-5 md:p-6 shadow-sm">
           <h3 className="font-display text-base font-bold text-tc-navy mb-1">Who covers accidents, when</h3>
           <p className="text-xs text-tc-muted mb-4 leading-relaxed">
-            Accidental damage such as drops and spills is only covered by the paid warranty. These bars show
-            the share of accident failures it picks up and when. Hover a percentage for details.
+            Accidental damage such as drops and spills is only covered by the paid warranty and — for
+            a short window after purchase — your credit card's purchase protection. These bars show
+            the share of accident failures each picks up. Hover a percentage for details.
           </p>
           <div className="space-y-2.5">
+            {purchaseProtection && purchaseProtection.days > 0 && (
+              <TrackBar
+                label="Card purchase protection"
+                gridlines={gridlines}
+                segments={[
+                  {
+                    leftPct: 0,
+                    widthPct: ppWidthPct,
+                    riskPct: purchaseProtection.riskPercentage,
+                    color: ORANGE,
+                    text: 'light',
+                    tooltip: ppTooltip,
+                    showLabelAlways: true,
+                  },
+                ]}
+              />
+            )}
             <TrackBar
               label="Paid warranty — accidental damage"
               gridlines={gridlines}
               segments={[
-                { leftPct: 0, widthPct: trackPcts.ewOverlap, riskPct: evaluation.ewTrack.overlapAccidentalRiskPercentage, color: LIME, text: 'light', tooltip: ewAccOverlapTooltip },
-                { leftPct: trackPcts.ewOverlap, widthPct: trackPcts.ewPostAcl, riskPct: evaluation.ewTrack.postAclAccidentalRiskPercentage, color: '#93d95e', text: 'light', tooltip: ewAccPostTooltip },
+                {
+                  leftPct: 0,
+                  widthPct: ppOverlapWidthPct,
+                  riskPct: evaluation.ewTrack.ppOverlapAccidentalRiskPercentage,
+                  color: LIME,
+                  text: 'light',
+                  tooltip: ewAccPpOverlapTooltip,
+                  label: ppZeroOverlap ? '0%' : undefined,
+                  striped: ppZeroOverlap,
+                },
+                {
+                  leftPct: ppOverlapWidthPct,
+                  widthPct: Math.max(0, 100 - ppOverlapWidthPct),
+                  riskPct: remainingAccPct,
+                  color: '#93d95e',
+                  text: 'light',
+                  tooltip: ewAccRestTooltip,
+                },
               ]}
             />
           </div>
           <TimeAxis ticks={yearTicks} />
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-tc-muted">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (overlaps free cover)</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#93d95e' }} /> Paid warranty (only this covers you)</span>
+            {purchaseProtection && purchaseProtection.days > 0 && (
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: ORANGE }} /> Card purchase protection (first {purchaseProtection.days} days, no excess)</span>
+            )}
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: LIME }} /> Paid warranty (overlap with card protection)</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm" style={{ background: '#93d95e' }} /> Paid warranty (elsewhere in its term)</span>
           </div>
         </section>
       )}
 
-      {/* Break-even detail */}
-      <section className="bg-tc-surface border border-tc-border rounded-2xl p-5 md:p-6 shadow-sm">
-        <h3 className="font-display text-base font-bold text-tc-navy mb-1">Break-even prices by excess</h3>
+      {/* Expert charts */}
+      <section className="bg-tc-surface border border-tc-border rounded-2xl shadow-sm overflow-hidden">
+        <button
+          onClick={() => setChartsOpen(!chartsOpen)}
+          className="w-full flex items-center justify-between px-5 md:px-6 py-4 hover:bg-tc-teal-light/40 transition-colors"
+        >
+          <div className="text-left">
+            <h3 className="font-display text-base font-bold text-tc-navy">Expert Charts</h3>
+            <p className="text-xs text-tc-muted mt-0.5">Break-even prices and the full price &amp; excess matrix.</p>
+          </div>
+          <span className={`text-tc-teal-dark transition-transform duration-200 ${chartsOpen ? 'rotate-180' : ''}`}>▼</span>
+        </button>
+        {chartsOpen && (
+        <div className="px-5 md:px-6 pb-6 border-t border-tc-border pt-4 space-y-5">
+        {/* Break-even detail */}
+        <section>
+          <h3 className="font-display text-base font-bold text-tc-navy mb-1">Break-even prices by excess</h3>
         <p className="text-xs text-tc-muted mb-4 leading-relaxed">
           The most the warranty could cost at each excess level before you'd expect to lose money on
-          average.
+          average.{evaluation.breakEven.hassleAvoidance > 0 && (
+            <> Includes ${evaluation.breakEven.hassleAvoidance.toFixed(0)} for the hassle of claims you'd otherwise have to make under your legal rights.</>
+          )}
         </p>
         <div className="space-y-2">
           {evaluation.breakEven.levels.map((level) => {
@@ -432,9 +551,8 @@ export default function NumbersSection({
         </div>
       </section>
 
-      {/* Matrix */}
-      <section className="bg-tc-surface border border-tc-border rounded-2xl p-5 md:p-6 shadow-sm">
-        <h3 className="font-display text-base font-bold text-tc-navy mb-1">Every price &amp; excess combination</h3>
+        <section>
+          <h3 className="font-display text-base font-bold text-tc-navy mb-1">Every price &amp; excess combination</h3>
         <p className="text-xs text-tc-muted mb-4 leading-relaxed">
           Deeper green means the warranty pays its way at that price and excess; deeper red means
           you'd expect to lose more money. Pale cells are close to break-even ($0). Values shown are
@@ -485,6 +603,9 @@ export default function NumbersSection({
             </tbody>
           </table>
         </div>
+        </section>
+        </div>
+        )}
       </section>
     </div>
   );

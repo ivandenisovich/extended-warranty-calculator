@@ -15,6 +15,16 @@ export interface VerdictInfo {
   quotedPct: number;
 }
 
+function formatFair(v: number): string {
+  return `${Math.round(v).toLocaleString('en-AU')}`;
+}
+
+function formatPrice(v: number): string {
+  const cents = Math.round(v * 100) / 100;
+  const digits = Number.isInteger(cents) ? 0 : 2;
+  return `${cents.toLocaleString('en-AU', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
 export function computeVerdict(
   evaluation: EvaluationResult,
   quotedPremium: number,
@@ -23,7 +33,7 @@ export function computeVerdict(
   if (!quotedPremium || quotedPremium <= 0) return null;
   const { breakEven, repairCost } = evaluation;
   const effectiveRepair = Math.max(0, repairCost - quotedExcess);
-  const fairPrice = Math.round(breakEven.netRiskProb * effectiveRepair * 100) / 100;
+  const fairPrice = Math.round(breakEven.netRiskProb * effectiveRepair + breakEven.hassleAvoidance);
   const ratio = quotedPremium / Math.max(fairPrice, 0.01);
 
   let verdict: Verdict;
@@ -35,22 +45,21 @@ export function computeVerdict(
   const fairPct = Math.min(95, Math.max(3, (fairPrice / scaleMax) * 100));
   const quotedPct = Math.min(95, Math.max(3, (quotedPremium / scaleMax) * 100));
 
-  const fmt = (v: number) =>
-    v.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const overBy = formatPrice(quotedPremium - fairPrice);
 
   const headline =
     verdict === 'worth-it'
-      ? `Worth considering — ${fmt(quotedPremium)} is at or below fair value`
+      ? `Worth considering — ${formatPrice(quotedPremium)} is at or below fair value`
       : verdict === 'borderline'
-        ? `Borderline — you'd pay ${fmt(quotedPremium - fairPrice)} over fair value`
-        : `Skip it — ${fmt(quotedPremium)} is worth about ${fmt(fairPrice)}`;
+        ? `Borderline — you'd pay ${overBy} over fair value`
+        : `Skip it — the paid warranty is only worth about ${formatFair(fairPrice)}, not ${formatPrice(quotedPremium)}`;
 
   const detail =
     verdict === 'worth-it'
       ? `This warranty covers about ${(breakEven.netRiskProb * 100).toFixed(0)}% of repair risk. At this price you'd roughly break even or come out ahead.`
       : verdict === 'borderline'
-        ? `It's close: the fair price is about ${fmt(fairPrice)} with your ${fmt(quotedExcess)} excess. Not terrible, but the retailer has the edge.`
-        : `The fair price is about ${fmt(fairPrice)} with a ${fmt(quotedExcess)} excess. You'd expect to lose ${fmt(quotedPremium - fairPrice)} on average.`;
+        ? `It's close: the fair price is about ${formatFair(fairPrice)} with your ${formatPrice(quotedExcess)} excess. Not terrible, but the retailer has the edge.`
+        : `The fair price is about ${formatFair(fairPrice)} with a ${formatPrice(quotedExcess)} excess. You'd expect to lose ${overBy} on average.`;
 
   return { verdict, headline, detail, fairPrice, quoted: quotedPremium, fairPct, quotedPct };
 }
@@ -80,7 +89,7 @@ export default function VerdictBanner({ info }: { info: VerdictInfo }) {
         >
           <div className={`w-4 h-4 rounded-full border-2 ${styles.marker} ${info.verdict === 'worth-it' ? 'border-tc-lime' : 'border-transparent'} mx-auto`} />
           <div className="text-[11px] font-numeric font-semibold text-center mt-0.5 whitespace-nowrap">
-            Fair ${info.fairPrice.toFixed(0)}
+            Fair {formatFair(info.fairPrice)}
           </div>
         </div>
         {/* Quoted price marker */}
@@ -90,7 +99,7 @@ export default function VerdictBanner({ info }: { info: VerdictInfo }) {
         >
           <div className="w-4 h-4 rounded-sm rotate-45 border-2 border-white bg-transparent mx-auto" />
           <div className="text-[11px] font-numeric font-semibold text-center mt-1 whitespace-nowrap">
-            Quoted ${info.quoted.toFixed(0)}
+            Quoted {formatPrice(info.quoted)}
           </div>
         </div>
       </div>

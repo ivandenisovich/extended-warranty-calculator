@@ -3,8 +3,8 @@
 import { DEFAULT_HAZARD, type HazardShape } from './warrantyTypes.client';
 
 export interface Assumptions {
-  failureRate: number;
-  accidentalShare: number; // 0-100 as shown on the page
+  failureRate: number; // defect-only, 0-100 as shown on the page
+  accidentRate: number; // independent of failureRate, 0-100 as shown on the page
   repairRatio: number; // 0-100 as shown on the page
   hazard: HazardShape;
 }
@@ -17,7 +17,7 @@ export interface AssumptionsProps {
 
 export interface CategoryDefaultsShape {
   failureRate: number;
-  accidentalShare: number; // 0-100
+  accidentRate: number; // 0-100
   repairRatio: number; // 0-100
 }
 
@@ -85,7 +85,7 @@ export default function AssumptionsPanel({ categoryDefaults, assumptions, onChan
 
       <div className="grid grid-cols-2 gap-3">
         <NumberField
-          label="Baseline 5-Yr Failure Risk"
+          label="Baseline 5-Yr Defect Risk"
           value={assumptions.failureRate}
           onChange={(v) => set('failureRate', v)}
           min={0}
@@ -93,9 +93,9 @@ export default function AssumptionsPanel({ categoryDefaults, assumptions, onChan
           suffix="%"
         />
         <NumberField
-          label="Accidental Share of Failures"
-          value={assumptions.accidentalShare}
-          onChange={(v) => set('accidentalShare', v)}
+          label="5-Yr Accidental-Damage Risk"
+          value={assumptions.accidentRate}
+          onChange={(v) => set('accidentRate', v)}
           min={0}
           max={100}
           suffix="%"
@@ -186,7 +186,7 @@ export default function AssumptionsPanel({ categoryDefaults, assumptions, onChan
   function resetToDefaults(cat: CategoryDefaultsShape) {
     onChange({
       failureRate: cat.failureRate,
-      accidentalShare: cat.accidentalShare,
+      accidentRate: cat.accidentRate,
       repairRatio: cat.repairRatio,
       hazard: { ...DEFAULT_HAZARD },
     });

@@ -1,8 +1,10 @@
 import { getCategories } from './categories';
+import { getCalculatorDefaults } from './jurisdictionRules.server';
 import Analyzer from './Analyzer';
+import Link from 'next/link';
 
-export default function Home() {
-  const categories = getCategories();
+export default async function Home() {
+  const [categories, defaults] = await Promise.all([getCategories(), getCalculatorDefaults()]);
 
   return (
     <main className="min-h-screen bg-tc-bg text-tc-navy">
@@ -28,15 +30,24 @@ export default function Home() {
           </h1>
           <p className="text-sm md:text-base text-tc-muted max-w-2xl leading-relaxed">
             Answer a few questions — or paste a product link — and we&apos;ll tell you what the warranty
-            would be worth based on real failure rates, repair costs, and your legal rights.
+            would be worth based on real failure rates, repair costs, and your legal rights.{' '}
+            <Link
+              href="/how-it-works"
+              className="text-tc-teal-dark font-semibold underline underline-offset-2 hover:text-tc-navy transition-colors"
+            >
+              See how it works.
+            </Link>
           </p>
         </div>
 
-        <Analyzer categories={categories} />
+        <Analyzer categories={categories} defaults={defaults} />
 
         <footer className="mt-12 pt-6 border-t border-tc-border text-xs text-tc-muted leading-relaxed">
           Estimates only — based on general failure-rate research, not on this specific model. Nothing
-          you enter is saved or sent anywhere except the retailer page you ask us to read.
+          you enter is saved or sent anywhere except the retailer page you ask us to read.{' '}
+          <Link href="/how-it-works" className="underline underline-offset-2 hover:text-tc-navy transition-colors">
+            How the calculator works
+          </Link>
         </footer>
       </div>
     </main>

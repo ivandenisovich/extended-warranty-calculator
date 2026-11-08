@@ -3,6 +3,10 @@
 import React from 'react';
 import type { Assumptions } from './AssumptionsPanel';
 import type { CategoryInfo } from './categories';
+import type { CalculatorDefaults, Jurisdiction } from '../lib/publicTypes';
+import { JURISDICTION_RULES, fallbackRule } from '../lib/jurisdictionRules';
+import { US_STATES, usTierOf } from '../lib/usTierRules';
+import { CALCULATOR_DEFAULTS } from '../lib/calculatorDefaults';
 import { DEFAULT_HAZARD } from './warrantyTypes.client';
 
 export interface FormState {
@@ -11,10 +15,12 @@ export interface FormState {
   ownershipYears: number;
   mfrYears: number;
   extendedWarrantyYears: number;
-  jurisdiction: 'australia' | 'other';
+  jurisdiction: Jurisdiction;
+  usState: string;
   purchaseProtectionDays: number;
   includesAccidental: boolean;
   frictionCost: number;
+  daysOutsideAustralia: number;
   ccExtensionMonths: number;
   ccExcess: number;
   quotedPremium: number | '';
@@ -22,25 +28,31 @@ export interface FormState {
   assumptions: Assumptions;
 }
 
-export function makeInitialState(categories: CategoryInfo[]): FormState {
+export function makeInitialState(
+  categories: CategoryInfo[],
+  overrides?: Partial<CalculatorDefaults>
+): FormState {
   const first = categories[0];
+  const d = { ...CALCULATOR_DEFAULTS, ...overrides };
   return {
     productCategory: first?.key ?? 'smartphones',
-    productPrice: 1200,
-    ownershipYears: 5,
-    mfrYears: 1,
-    extendedWarrantyYears: 5,
+    productPrice: d.productPrice,
+    ownershipYears: d.ownershipYears,
+    mfrYears: d.mfrYears,
+    extendedWarrantyYears: d.extendedWarrantyYears,
     jurisdiction: 'australia',
-    purchaseProtectionDays: 0,
+    usState: '',
+    purchaseProtectionDays: d.purchaseProtectionDays,
     includesAccidental: true,
-    frictionCost: 50,
-    ccExtensionMonths: 12,
-    ccExcess: 50,
+    frictionCost: d.frictionCost,
+    daysOutsideAustralia: 0,
+    ccExtensionMonths: d.ccExtensionMonths,
+    ccExcess: d.ccExcess,
     quotedPremium: '',
-    quotedExcess: 0,
+    quotedExcess: d.quotedExcess,
     assumptions: {
-      failureRate: first?.defaults.failureRate ?? 25,
-      accidentalShare: first?.defaults.accidentalShare ?? 40,
+      failureRate: first?.defaults.failureRate ?? 15,
+      accidentRate: first?.defaults.accidentRate ?? 20,
       repairRatio: first?.defaults.repairRatio ?? 35,
       hazard: { ...DEFAULT_HAZARD },
     },
@@ -50,8 +62,8 @@ export function makeInitialState(categories: CategoryInfo[]): FormState {
 export function categoryDefaults(categories: CategoryInfo[], key: string) {
   return (
     categories.find((c) => c.key === key)?.defaults ?? {
-      failureRate: 25,
-      accidentalShare: 40,
+      failureRate: 15,
+      accidentRate: 20,
       repairRatio: 35,
     }
   );
@@ -106,6 +118,18 @@ function StepCard({
   );
 }
 
+export function jurisdictionCountryName(j: Jurisdiction): string {
+  return fallbackRule(j).display_name;
+}
+
+export function jurisdictionLawName(j: Jurisdiction): string {
+  return fallbackRule(j).law_name;
+}
+
+export function lawShortName(j: Jurisdiction): string {
+  return fallbackRule(j).law_short;
+}
+
 export default function InputFlow({
   categories,
   state,
@@ -128,7 +152,7 @@ export default function InputFlow({
       productCategory: key,
       assumptions: {
         failureRate: cat.defaults.failureRate,
-        accidentalShare: cat.defaults.accidentalShare,
+        accidentRate: cat.defaults.accidentRate,
         repairRatio: cat.defaults.repairRatio,
         hazard: { ...state.assumptions.hazard },
       },
@@ -194,17 +218,45 @@ export default function InputFlow({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field
             label="Country where you bought it"
-            hint="Australian Consumer Law provides additional protection for the “reasonable life” of the product."
+            hint={
+              state.jurisdiction === 'united-states'
+                ? 'Implied-warranty rights differ by state. Pick your state to see its tier.'
+                : `${jurisdictionLawName(state.jurisdiction)} provides additional protection for the “reasonable life” of the product.`
+            }
           >
             <select
               value={state.jurisdiction}
-              onChange={(e) => set('jurisdiction', e.target.value as 'australia' | 'other')}
+              onChange={(e) => set('jurisdiction', e.target.value as Jurisdiction)}
               className={inputCls}
             >
-              <option value="australia">Australia</option>
-              <option value="other">Somewhere else</option>
+              {JURISDICTION_RULES.map((r) => (
+                <option key={r.jurisdiction} value={r.jurisdiction}>{r.display_name}</option>
+              ))}
             </select>
           </Field>
+          {state.jurisdiction === 'united-states' && (
+            <Field
+              label="State"
+              hint={
+                state.usState
+                  ? `Tier ${usTierOf(state.usState)}: ${usTierOf(state.usState) === 1 ? 'expected-life implied warranty capped at 4 years, claims worth 75%' : usTierOf(state.usState) === 2 ? 'flat 1-year implied warranty on all items' : 'no implied warranty period'}.`
+                  : 'Choose a state to resolve its consumer-rights tier.'
+              }
+            >
+              <select
+                value={state.usState}
+                onChange={(e) => set('usState', e.target.value)}
+                className={inputCls}
+              >
+                <option value="">Select a state…</option>
+                {US_STATES.map((s) => (
+                  <option key={s.state_code} value={s.state_code}>
+                    {s.state_name} — Tier {s.tier}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
         </div>
       </StepCard>
 
@@ -275,16 +327,31 @@ export default function InputFlow({
               className={inputCls}
             />
           </Field>
-          {state.jurisdiction === 'australia' && (
+          {state.jurisdiction !== 'other' && (
             <Field
-              label="What avoiding ACL hassle is worth to you ($)"
-              hint="Australian consumer guarantees already cover major failures — a paid warranty saves you arguing with the retailer. How much is that peace of mind worth?"
+              label={`What avoiding ${lawShortName(state.jurisdiction)} hassle is worth to you ($)`}
+              hint={`${jurisdictionCountryName(state.jurisdiction)} consumer law already covers major failures — a paid warranty saves you arguing with the retailer. This amount is added to the paid warranty's value, raising its fair price, break-even prices, the matrix results, and the verdict.`}
             >
               <input
                 type="number"
                 min={0}
                 value={state.frictionCost}
                 onChange={(e) => set('frictionCost', Number(e.target.value))}
+                className={inputCls}
+              />
+            </Field>
+          )}
+          {state.jurisdiction !== 'other' && (
+            <Field
+              label="How many days per year will you have this item with you overseas?"
+              hint={`Paid warranties often let you make claims overseas, but ${jurisdictionLawName(state.jurisdiction)} doesn't provide this.`}
+            >
+              <input
+                type="number"
+                min={0}
+                max={365}
+                value={state.daysOutsideAustralia}
+                onChange={(e) => set('daysOutsideAustralia', Number(e.target.value))}
                 className={inputCls}
               />
             </Field>
