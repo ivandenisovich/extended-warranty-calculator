@@ -318,15 +318,6 @@ export default function InputFlow({
               className={inputCls}
             />
           </Field>
-          <Field label="Excess per claim ($)" hint="What you pay out of pocket when you make a claim.">
-            <input
-              type="number"
-              min={0}
-              value={state.quotedExcess}
-              onChange={(e) => set('quotedExcess', Number(e.target.value))}
-              className={inputCls}
-            />
-          </Field>
           {state.jurisdiction !== 'other' && (
             <Field
               label={`What avoiding ${lawShortName(state.jurisdiction)} hassle is worth to you ($)`}
@@ -357,17 +348,34 @@ export default function InputFlow({
             </Field>
           )}
         </div>
-        <label className="flex items-start gap-2.5 mt-4 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={state.includesAccidental}
-            onChange={(e) => set('includesAccidental', e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-tc-border text-tc-teal focus:ring-tc-teal"
-          />
-          <span className="text-sm text-tc-navy leading-snug">
-            The extended warranty covers accidental damage (drops, spills)
-          </span>
-        </label>
+        <div className="flex items-start gap-6 mt-4 flex-wrap">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={state.includesAccidental}
+              onChange={(e) => set('includesAccidental', e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-tc-border text-tc-teal focus:ring-tc-teal"
+            />
+            <span className="text-sm text-tc-navy leading-snug">
+              The extended warranty covers accidental damage (drops, spills)
+            </span>
+          </label>
+          {state.includesAccidental && (
+            <label className="block w-40">
+              <span className={labelCls}>Excess for accidental damage ($)</span>
+              <input
+                type="number"
+                min={0}
+                value={state.quotedExcess}
+                onChange={(e) => set('quotedExcess', Number(e.target.value))}
+                className={inputCls}
+              />
+              <span className="block text-[11px] text-tc-muted mt-1 leading-snug">
+                What you pay out of pocket per accidental-damage claim. Defect and fault claims pay no excess.
+              </span>
+            </label>
+          )}
+        </div>
       </StepCard>
     </div>
   );

@@ -183,6 +183,8 @@ export interface EvaluationResult {
     // Break-even premium for each price-scaled excess level
     levels: { excess: number; breakEvenPremium: number }[];
     atZeroExcess: number;
+    // Fair premium at the user's quoted excess (accident claims only)
+    atQuotedExcess: number;
     // Net risk the EW actually covers, as a probability (0-1)
     netRiskProb: number;
     // Dollar value of avoided ACL hassle included in the fair price

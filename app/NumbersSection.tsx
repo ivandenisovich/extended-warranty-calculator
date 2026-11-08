@@ -512,9 +512,9 @@ export default function NumbersSection({
         <div className="px-5 md:px-6 pb-6 border-t border-tc-border pt-4 space-y-5">
         {/* Break-even detail */}
         <section>
-          <h3 className="font-display text-base font-bold text-tc-navy mb-1">Break-even prices by excess</h3>
+          <h3 className="font-display text-base font-bold text-tc-navy mb-1">Break-even prices by accidental-damage excess</h3>
         <p className="text-xs text-tc-muted mb-4 leading-relaxed">
-          The most the warranty could cost at each excess level before you'd expect to lose money on
+          The most the warranty could cost at each excess level (charged on accidental-damage claims only) before you'd expect to lose money on
           average.{evaluation.breakEven.hassleAvoidance > 0 && (
             <> Includes ${evaluation.breakEven.hassleAvoidance.toFixed(0)} for the hassle of claims you'd otherwise have to make under your legal rights.</>
           )}
@@ -552,9 +552,9 @@ export default function NumbersSection({
       </section>
 
         <section>
-          <h3 className="font-display text-base font-bold text-tc-navy mb-1">Every price &amp; excess combination</h3>
+          <h3 className="font-display text-base font-bold text-tc-navy mb-1">Every price &amp; accidental-damage excess combination</h3>
         <p className="text-xs text-tc-muted mb-4 leading-relaxed">
-          Deeper green means the warranty pays its way at that price and excess; deeper red means
+          Deeper green means the warranty pays its way at that price and accidental-damage excess; deeper red means
           you'd expect to lose more money. Pale cells are close to break-even ($0). Values shown are
           your average gain or loss in dollars.
         </p>
@@ -569,7 +569,7 @@ export default function NumbersSection({
                   colSpan={evaluation.matrix.excesses.length}
                   className="py-1 px-2 text-center font-semibold text-tc-navy"
                 >
-                  <span className="text-[11px]">Excess per claim ($)</span>
+                  <span className="text-[11px]">Accidental-damage excess ($)</span>
                 </th>
               </tr>
               <tr className="border-b border-tc-border text-tc-muted">

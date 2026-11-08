@@ -27,13 +27,11 @@ function formatPrice(v: number): string {
 
 export function computeVerdict(
   evaluation: EvaluationResult,
-  quotedPremium: number,
-  quotedExcess: number
+  quotedPremium: number
 ): VerdictInfo | null {
   if (!quotedPremium || quotedPremium <= 0) return null;
-  const { breakEven, repairCost } = evaluation;
-  const effectiveRepair = Math.max(0, repairCost - quotedExcess);
-  const fairPrice = Math.round(breakEven.netRiskProb * effectiveRepair + breakEven.hassleAvoidance);
+  const { breakEven } = evaluation;
+  const fairPrice = Math.round(breakEven.atQuotedExcess);
   const ratio = quotedPremium / Math.max(fairPrice, 0.01);
 
   let verdict: Verdict;
@@ -58,8 +56,8 @@ export function computeVerdict(
     verdict === 'worth-it'
       ? `This warranty covers about ${(breakEven.netRiskProb * 100).toFixed(0)}% of repair risk. At this price you'd roughly break even or come out ahead.`
       : verdict === 'borderline'
-        ? `It's close: the fair price is about ${formatFair(fairPrice)} with your ${formatPrice(quotedExcess)} excess. Not terrible, but the retailer has the edge.`
-        : `The fair price is about ${formatFair(fairPrice)} with a ${formatPrice(quotedExcess)} excess. You'd expect to lose ${overBy} on average.`;
+        ? `It's close: the fair price is about ${formatFair(fairPrice)} once your accidental-damage excess is counted. Not terrible, but the retailer has the edge.`
+        : `The fair price is about ${formatFair(fairPrice)} once your accidental-damage excess is counted. You'd expect to lose ${overBy} on average.`;
 
   return { verdict, headline, detail, fairPrice, quoted: quotedPremium, fairPct, quotedPct };
 }

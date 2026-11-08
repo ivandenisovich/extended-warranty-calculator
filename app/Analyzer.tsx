@@ -87,8 +87,7 @@ export default function Analyzer({
     evaluation
       ? computeVerdict(
           evaluation,
-          typeof form.quotedPremium === 'number' ? form.quotedPremium : 0,
-          form.quotedExcess
+          typeof form.quotedPremium === 'number' ? form.quotedPremium : 0
         )
       : null;
 

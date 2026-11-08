@@ -46,8 +46,9 @@ export interface EvaluationInput {
   usTier?: UsTierRule;
   // Credit card purchase protection: covers accidental damage for N days from purchase
   purchaseProtectionDays?: number;
-  // Quoted paid-warranty excess; when > 0, its accident claims lose to the
-  // card's excess-free purchase protection during the overlap
+  // Quoted paid-warranty excess, applied to accidental-damage claims only
+  // (defect claims pay nothing). When > 0, its accident claims also lose to
+  // the card's excess-free purchase protection during the overlap.
   quotedExcess?: number;
   // Days per year the item travels overseas: there, claiming under ACL is
   // impractical, so a slice of overlap-period defects earns the paid warranty value
@@ -329,8 +330,12 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     ewCcOverlapDefect += (defectWeights[y - 1] * totalDefectProb) / 12;
   }
 
-  const ewNetRisk =
-    ewOverlapOverseasDefect + ewPostDefect - ewCcOverlapDefect + ewAccCounted;
+  // The quoted excess applies to accidental-damage claims only: defects pay
+  // the full repair cost, accidents pay what's left after the excess.
+  const ewNetRiskDefect =
+    ewOverlapOverseasDefect + ewPostDefect - ewCcOverlapDefect;
+  const ewNetRiskAcc = ewAccCounted;
+  const ewNetRisk = ewNetRiskDefect + ewNetRiskAcc;
 
   const mfrEV = mfrRisk * repairCost;
   // A tier's value_factor devalues statutory claims (e.g. 0.75 when the
@@ -345,7 +350,8 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   // the break-even range so positive and net-neutral combinations are visible.
   const excessLevels = scaledExcessLevels(productPrice);
 
-  const fairAt = (exc: number) => ewNetRisk * Math.max(0, repairCost - exc) + hassleAvoidance;
+  const fairAt = (exc: number) =>
+    ewNetRiskDefect * repairCost + ewNetRiskAcc * Math.max(0, repairCost - exc) + hassleAvoidance;
   const breakEvenLevels = excessLevels.map((exc) => ({
     excess: exc,
     breakEvenPremium: Math.round(fairAt(exc) * 100) / 100,
@@ -432,6 +438,7 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
     breakEven: {
       levels: breakEvenLevels,
       atZeroExcess,
+      atQuotedExcess: fairAt(clamp(input.quotedExcess ?? 0, 0, Infinity)),
       netRiskProb: ewNetRisk,
       hassleAvoidance: Math.round(hassleAvoidance * 100) / 100,
     },
