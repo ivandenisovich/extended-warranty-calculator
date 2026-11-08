@@ -19,6 +19,8 @@ import type { Assumptions } from './AssumptionsPanel';
 import type { CalculatorDefaults } from '../lib/publicTypes';
 import type { EwPricingConfig } from '../lib/ewPricingModel';
 import { suggestedOffer } from '../lib/ewPricingModel';
+import { buildEvaluationBody } from './evaluationRequest';
+import { saveCalculator } from './calculatorStorage';
 
 export default function Analyzer({
   categories,
@@ -40,6 +42,10 @@ export default function Analyzer({
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    saveCalculator({ form, productName });
+  }, [form, productName]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -47,28 +53,7 @@ export default function Analyzer({
       fetch('/api/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productPrice: Number(form.productPrice) || 0,
-          productCategory: form.productCategory,
-          mfrYears: Number(form.mfrYears) || 0,
-          extendedWarrantyYears: Number(form.extendedWarrantyYears) || 0,
-          ccExtensionMonths: Number(form.ccExtensionMonths) || 0,
-          ccExcess: Number(form.ccExcess) || 0,
-          purchaseProtectionDays: Number(form.purchaseProtectionDays) || 0,
-          ownershipYears: Number(form.ownershipYears) || 1,
-          jurisdiction: form.jurisdiction,
-          quotedExcess: typeof form.quotedExcess === 'number' ? form.quotedExcess : 0,
-          usState: form.jurisdiction === 'united-states' ? form.usState : undefined,
-          includesAccidental: form.includesAccidental,
-          frictionCost: Number(form.frictionCost) || 0,
-          daysOutsideAustralia: Number(form.daysOutsideAustralia) || 0,
-          assumptions: {
-            failureRate: Number(form.assumptions.failureRate) || 0,
-            accidentRate: Number(form.assumptions.accidentRate) || 0,
-            repairRatio: Number(form.assumptions.repairRatio) || 0,
-            hazard: form.assumptions.hazard,
-          },
-        }),
+        body: JSON.stringify(buildEvaluationBody(form)),
         signal: controller.signal,
       })
         .then((res) => {
