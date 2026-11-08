@@ -2,8 +2,8 @@
 // screen. Keeps its proportions on laptops and shrinks to fit shorter screens.
 export default function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-[380px] rounded-[3.25rem] bg-tc-navy p-3 shadow-2xl ring-1 ring-black/10">
-      <div className="relative h-[min(780px,calc(100vh-7rem))] overflow-hidden rounded-[2.6rem] bg-tc-bg flex flex-col">
+    <div className="mx-auto w-full max-w-[380px] rounded-[3rem] bg-tc-navy p-2.5 shadow-[0_30px_60px_-15px_rgba(15,29,51,0.45)]">
+      <div className="relative h-[min(760px,calc(100vh-6rem))] overflow-hidden rounded-[2.5rem] bg-tc-bg flex flex-col">
         <div
           className="absolute top-2.5 left-1/2 -translate-x-1/2 h-[30px] w-[110px] rounded-full bg-tc-navy z-10"
           aria-hidden
