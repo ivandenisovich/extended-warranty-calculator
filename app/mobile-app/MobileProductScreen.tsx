@@ -4,39 +4,26 @@ import { useEffect, useState } from 'react';
 import type { CategoryInfo } from '../categories';
 import type { EwPricingConfig } from '../../lib/ewPricingModel';
 import { loadCalculator, type StoredCalculator } from '../calculatorStorage';
-import CoverGridView from './CoverGrid';
-import ProductInfoCard from './ProductInfoCard';
 import { jurisdictionCountryName } from '../InputFlow';
 import { US_STATES } from '../../lib/usTierRules';
-import { summariseCoverGrid, type CoverGrid } from './coverGrid';
+import ProductInfoCard from './ProductInfoCard';
+import WarrantyGridSection from './WarrantyGridSection';
+import FairValueQuote from './FairValueQuote';
 
 export default function MobileProductScreen({
   categories,
   pricing,
+  variant,
 }: {
   categories: CategoryInfo[];
   pricing: EwPricingConfig;
+  variant: 'grid' | 'quote';
 }) {
   const [stored, setStored] = useState<StoredCalculator | null | undefined>(undefined);
-  const [grid, setGrid] = useState<CoverGrid | null>(null);
-  const [gridFailed, setGridFailed] = useState(false);
 
   useEffect(() => {
-    const saved = loadCalculator();
-    setStored(saved);
-    if (!saved) return;
-    let cancelled = false;
-    summariseCoverGrid(saved.form, pricing)
-      .then((result) => {
-        if (!cancelled) setGrid(result);
-      })
-      .catch(() => {
-        if (!cancelled) setGridFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pricing]);
+    setStored(loadCalculator());
+  }, []);
 
   if (stored === undefined) return null;
 
@@ -55,6 +42,7 @@ export default function MobileProductScreen({
     form.jurisdiction === 'united-states' && stateName
       ? stateName
       : jurisdictionCountryName(form.jurisdiction);
+  const price = Number(form.productPrice) || 0;
 
   return (
     <>
@@ -75,22 +63,13 @@ export default function MobileProductScreen({
         </div>
       </div>
 
-      <ProductInfoCard
-        categoryName={categoryName}
-        price={Number(form.productPrice) || 0}
-        location={location}
-      />
+      <ProductInfoCard categoryName={categoryName} price={price} location={location} />
 
-      <div className="mx-5 mt-4">
-        <h4 className="font-display font-bold text-sm mb-3">Is a paid warranty worth it?</h4>
-        {grid && <CoverGridView grid={grid} />}
-        {!grid && !gridFailed && <p className="text-sm text-tc-muted text-center">Calculating…</p>}
-        {gridFailed && (
-          <p className="text-sm text-tc-red text-center">
-            Couldn&apos;t work out the warranty options. Reload this page to try again.
-          </p>
-        )}
-      </div>
+      {variant === 'grid' ? (
+        <WarrantyGridSection form={form} pricing={pricing} />
+      ) : (
+        <FairValueQuote price={price} categoryKey={form.productCategory} pricing={pricing} />
+      )}
     </>
   );
 }
