@@ -34,6 +34,9 @@ export interface EvaluationInput {
   jurisdiction: Jurisdiction;
   includesAccidental: boolean;
   frictionCost: number;
+  // False removes statutory consumer rights from the calculation (the user
+  // chose not to count them); defaults to counting them.
+  includeStatutoryRights?: boolean;
   // The category's estimate parameters, loaded from the category_rules
   // database table (fallback copy used if unreachable).
   categoryRule?: CategoryRule;
@@ -115,9 +118,11 @@ export function evaluateWarranty(input: EvaluationInput): EvaluationResult {
   const cat: CategoryRule = input.categoryRule ?? fallbackCategoryRule(productCategory);
   const usTier: UsTierRule | undefined = input.usTier;
   // A US state's tier rule replaces the 'united-states' placeholder
-  const hasStatutory = usTier
-    ? usTier.duration_model !== 'none'
-    : rule.flat_years !== 0 || rule.duration_model === 'category_estimate';
+  const hasStatutory =
+    input.includeStatutoryRights !== false &&
+    (usTier
+      ? usTier.duration_model !== 'none'
+      : rule.flat_years !== 0 || rule.duration_model === 'category_estimate');
   const isUk = rule.value_model === 'uk_step_decline';
   const isEu = rule.value_model === 'eu_reversal_step';
 

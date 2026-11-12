@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { ewExcess, ewPrice, type EwPricingConfig } from '../../lib/ewPricingModel';
+import { useEffect, useState } from 'react';
+import type { FormState } from '../InputFlow';
+import { buildEvaluationBody } from '../evaluationRequest';
+import type { EvaluationResult } from '../../lib/publicTypes';
 
 const YEAR_OPTIONS = [1, 2, 3];
 
@@ -17,22 +19,63 @@ const planCardCls = (active: boolean) =>
     active ? 'border-tc-navy bg-tc-teal-light' : 'border-tc-border bg-white'
   }`;
 
-export default function FairValueQuote({
-  price,
-  categoryKey,
-  pricing,
-}: {
-  price: number;
-  categoryKey: string;
-  pricing: EwPricingConfig;
-}) {
+interface FairCosts {
+  defects: number;
+  accidental: number;
+}
+
+async function fetchFairPremium(
+  base: ReturnType<typeof buildEvaluationBody>,
+  options: { years: number; includesAccidental: boolean; excess: number; useRights: boolean; usePerks: boolean },
+  signal: AbortSignal
+): Promise<number> {
+  const res = await fetch('/api/evaluate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...base,
+      extendedWarrantyYears: options.years,
+      includesAccidental: options.includesAccidental,
+      quotedExcess: options.excess,
+      includeStatutoryRights: options.useRights,
+      ...(options.usePerks ? {} : { purchaseProtectionDays: 0, ccExtensionMonths: 0 }),
+    }),
+    signal,
+  });
+  const data = (await res.json()) as { ok: boolean; evaluation?: EvaluationResult };
+  if (!res.ok || !data.ok || !data.evaluation) throw new Error('evaluate_failed');
+  return Math.round(data.evaluation.breakEven.atQuotedExcess);
+}
+
+export default function FairValueQuote({ form }: { form: FormState }) {
   const [years, setYears] = useState(2);
   const [accidental, setAccidental] = useState(false);
-  const [excess, setExcess] = useState(() => ewExcess(pricing, price));
+  const [excess, setExcess] = useState(form.quotedExcess);
+  const [useRights, setUseRights] = useState(true);
+  const [usePerks, setUsePerks] = useState(true);
+  const [costs, setCosts] = useState<FairCosts | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  const defectsCost = Math.round(ewPrice(pricing, price, categoryKey, years, false));
-  const accidentalCost = Math.round(ewPrice(pricing, price, categoryKey, years, true));
-  const fairCost = accidental ? accidentalCost : defectsCost;
+  useEffect(() => {
+    const controller = new AbortController();
+    const base = buildEvaluationBody(form);
+    const options = { years, excess, useRights, usePerks };
+    Promise.all([
+      fetchFairPremium(base, { ...options, includesAccidental: false }, controller.signal),
+      fetchFairPremium(base, { ...options, includesAccidental: true }, controller.signal),
+    ])
+      .then(([defects, accidentalCost]) => {
+        setCosts({ defects, accidental: accidentalCost });
+        setFailed(false);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setFailed(true);
+      });
+    return () => controller.abort();
+  }, [form, years, excess, useRights, usePerks]);
+
+  const fairCost = costs ? (accidental ? costs.accidental : costs.defects) : null;
+  const shown = (value: number | undefined) => (value === undefined ? '...' : `$${value}`);
 
   return (
     <div className="mx-5 mt-4 bg-white rounded-2xl p-4 shadow-sm border border-tc-border">
@@ -55,6 +98,31 @@ export default function FairValueQuote({
         </div>
       </div>
 
+      <div className="mb-4">
+        <span className={`${labelCls} block mb-2`}>Protection you already have</span>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-pressed={useRights}
+            onClick={() => setUseRights((v) => !v)}
+            className={pillCls(useRights)}
+          >
+            Consumer rights
+          </button>
+          <button
+            type="button"
+            aria-pressed={usePerks}
+            onClick={() => setUsePerks((v) => !v)}
+            className={pillCls(usePerks)}
+          >
+            Card perks
+          </button>
+        </div>
+        <p className="mt-2 text-[11px] text-tc-muted">
+          Counting these lowers the fair cost, because they already cover part of the risk.
+        </p>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <div className={planCardCls(!accidental)}>
           <button
@@ -64,7 +132,7 @@ export default function FairValueQuote({
             className="text-left"
           >
             <div className="text-xs font-semibold text-tc-navy">Defects only</div>
-            <div className="font-numeric font-bold text-xl text-tc-navy">${defectsCost}</div>
+            <div className="font-numeric font-bold text-xl text-tc-navy">{shown(costs?.defects)}</div>
           </button>
           <div className="mt-2 h-10 flex items-end text-[11px] text-tc-muted">No excess on defects</div>
         </div>
@@ -77,7 +145,7 @@ export default function FairValueQuote({
             className="text-left"
           >
             <div className="text-xs font-semibold text-tc-navy">Plus accidental damage</div>
-            <div className="font-numeric font-bold text-xl text-tc-navy">${accidentalCost}</div>
+            <div className="font-numeric font-bold text-xl text-tc-navy">{shown(costs?.accidental)}</div>
           </button>
           <div className="mt-2 h-10 flex items-end">
             {accidental ? (
@@ -90,7 +158,7 @@ export default function FairValueQuote({
                     min={0}
                     step={1}
                     value={excess}
-                    onChange={(e) => setExcess(Math.max(0, Number(e.target.value)))}
+                    onChange={(e) => setExcess(Math.max(0, Number(e.target.value)) || 0)}
                     aria-label="Excess per claim"
                     className="w-full rounded-lg border border-tc-border px-2 py-1 text-sm text-tc-navy focus:outline-none focus:border-tc-navy"
                   />
@@ -105,11 +173,19 @@ export default function FairValueQuote({
 
       <div className="mt-4 h-20 rounded-xl bg-tc-bg px-4 flex flex-col items-center justify-center text-center">
         <div className={labelCls}>Fair cost</div>
-        <div className="font-numeric font-bold text-3xl text-tc-navy leading-tight">${fairCost}</div>
-        <div className="text-xs text-tc-muted truncate max-w-full">
-          {years} extra {years === 1 ? 'year' : 'years'}
-          {accidental ? `, accidental damage, $${excess} excess` : ', defects only'}
-        </div>
+        {failed ? (
+          <div className="text-xs text-tc-muted">Couldn&apos;t work out the fair cost. Try again.</div>
+        ) : (
+          <>
+            <div className="font-numeric font-bold text-3xl text-tc-navy leading-tight">
+              {fairCost === null ? '...' : `$${fairCost}`}
+            </div>
+            <div className="text-xs text-tc-muted truncate max-w-full">
+              {years} extra {years === 1 ? 'year' : 'years'}
+              {accidental ? `, accidental damage, $${excess} excess` : ', defects only'}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

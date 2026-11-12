@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     categoryRule,
     usTier,
     includesAccidental: body.includesAccidental === true,
+    includeStatutoryRights: body.includeStatutoryRights !== false,
     frictionCost: Math.max(0, num(body.frictionCost)),
     daysOutsideAustralia: Math.min(365, Math.max(0, num(body.daysOutsideAustralia))),
     failureRate: num(assumptions.failureRate),

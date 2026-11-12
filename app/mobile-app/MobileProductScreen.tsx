@@ -68,7 +68,7 @@ export default function MobileProductScreen({
       {variant === 'grid' ? (
         <WarrantyGridSection form={form} pricing={pricing} />
       ) : (
-        <FairValueQuote price={price} categoryKey={form.productCategory} pricing={pricing} />
+        <FairValueQuote form={form} />
       )}
     </>
   );
