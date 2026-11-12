@@ -5,7 +5,9 @@ import type { CategoryInfo } from '../categories';
 import type { EwPricingConfig } from '../../lib/ewPricingModel';
 import { loadCalculator, type StoredCalculator } from '../calculatorStorage';
 import CoverGridView from './CoverGrid';
-import ProductDetailsCard from './ProductDetailsCard';
+import ProductInfoCard from './ProductInfoCard';
+import { jurisdictionCountryName } from '../InputFlow';
+import { US_STATES } from '../../lib/usTierRules';
 import { summariseCoverGrid, type CoverGrid } from './coverGrid';
 
 export default function MobileProductScreen({
@@ -46,8 +48,13 @@ export default function MobileProductScreen({
     );
   }
 
-  const { form, productName } = stored;
+  const { form } = stored;
   const categoryName = categories.find((c) => c.key === form.productCategory)?.name ?? form.productCategory;
+  const stateName = US_STATES.find((s) => s.state_code === form.usState)?.state_name;
+  const location =
+    form.jurisdiction === 'united-states' && stateName
+      ? stateName
+      : jurisdictionCountryName(form.jurisdiction);
 
   return (
     <>
@@ -68,7 +75,11 @@ export default function MobileProductScreen({
         </div>
       </div>
 
-      <ProductDetailsCard form={form} title={productName ?? categoryName} categoryName={categoryName} />
+      <ProductInfoCard
+        categoryName={categoryName}
+        price={Number(form.productPrice) || 0}
+        location={location}
+      />
 
       <div className="mx-5 mt-4">
         <h4 className="font-display font-bold text-sm mb-3">Is a paid warranty worth it?</h4>

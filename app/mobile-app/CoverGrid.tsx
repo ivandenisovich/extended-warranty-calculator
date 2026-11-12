@@ -32,8 +32,8 @@ export default function CoverGridView({ grid }: { grid: CoverGrid }) {
                   key={`${row.title}-${grid.extraYears[i]}`}
                   className={`${style.bg} ${style.text} rounded-xl px-1.5 py-2.5 flex flex-col items-center justify-center min-h-[68px] shadow-sm`}
                 >
-                  <span className="text-[11px] font-bold leading-tight">{style.label}</span>
-                  <span className="text-[10px] mt-1 leading-tight">{gapText(cell)}</span>
+                  <span className="text-[11px] font-bold leading-tight text-center">{style.label}</span>
+                  <span className="text-[10px] mt-1 leading-tight text-center">{gapText(cell)}</span>
                 </div>
               );
             })}
